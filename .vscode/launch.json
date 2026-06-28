@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Wend}",
+            "name": "Debug KeyLayoutFix",
+            "target": "KeyLayoutFix",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug KeyLayoutFix"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Wend}",
+            "name": "Release KeyLayoutFix",
+            "target": "KeyLayoutFix",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release KeyLayoutFix"
+        }
+    ]
+}
