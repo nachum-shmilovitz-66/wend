@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "KeyLayoutFix")
+            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Wend")
         }
 
         let menu = NSMenu()
@@ -56,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         axItem.target = self
 
         menu.addItem(.separator())
-        let quit = menu.addItem(withTitle: "Quit KeyLayoutFix", action: #selector(quit), keyEquivalent: "q")
+        let quit = menu.addItem(withTitle: "Quit Wend", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
 
         statusItem.menu = menu

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>KeyLayoutFix</string>
+    <string>Wend</string>
     <key>CFBundleDisplayName</key>
-    <string>KeyLayoutFix</string>
+    <string>Wend</string>
     <key>CFBundleIdentifier</key>
     <string>__BUNDLE_ID__</string>
     <key>CFBundleExecutable</key>
-    <string>KeyLayoutFix</string>
+    <string>Wend</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key>

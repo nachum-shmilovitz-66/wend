@@ -1,4 +1,4 @@
-# KeyLayoutFix
+# Wend
 
 Fix text typed in the wrong keyboard layout on macOS. You meant `שלום` but the English
 layout was active, so you got `akuo` — select it, double-tap **Shift**, and it becomes
@@ -12,7 +12,7 @@ per-language code: it reads your actual system layouts at runtime.
   - `LayoutMapper` — re-map text as if the same keys were pressed under another layout.
   - `LayoutDetector` — pick the conversion that produces the most real words.
   - `WordValidator` — protocol; "is this a real word in language X?".
-- **`KeyLayoutFix`** (macOS app)
+- **`Wend`** (macOS app)
   - `InputSourceProvider` — reads installed layouts via TIS + `UCKeyTranslate`.
   - `SpellWordValidator` — `NSSpellChecker`-backed `WordValidator`.
   - `SelectionService` — clipboard round-trip (⌘C → transform → ⌘V → restore).
@@ -25,13 +25,13 @@ per-language code: it reads your actual system layouts at runtime.
 ```sh
 swift build
 swift test                          # 10 Core unit tests, no system dependency
-swift run KeyLayoutFix --dump-layouts   # diagnostic: prints your live layouts + a sample fix
+swift run Wend --dump-layouts   # diagnostic: prints your live layouts + a sample fix
 ```
 
 ## Run
 
 ```sh
-swift run KeyLayoutFix
+swift run Wend
 ```
 
 The first launch prompts for **Accessibility** access (System Settings ▸ Privacy &
@@ -58,7 +58,7 @@ SIGN_IDENTITY="Developer ID Application: Nachum Shmilovitz (96Y4LX7FVB)" \
 bash scripts/notarize.sh
 ```
 
-Output: `dist/KeyLayoutFix.app`.
+Output: `dist/Wend.app`.
 
 ### Prerequisites (one-time, already set up on this machine)
 
@@ -79,7 +79,7 @@ bash scripts/notarize.sh
 ```
 
 `notarize.sh` zips, submits to Apple, staples the ticket, and runs a Gatekeeper check, so
-the resulting `dist/KeyLayoutFix.app` opens on any Mac without a security warning.
+the resulting `dist/Wend.app` opens on any Mac without a security warning.
 
 For quick local testing without notarization, sign with the Apple Development identity:
 `SIGN_IDENTITY="Apple Development: nachumsh@gmail.com (9DLP6W93FA)" bash scripts/package.sh`.
