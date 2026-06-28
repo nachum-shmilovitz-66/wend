@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "KeyLayoutFix",
+    name: "Wend",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .library(name: "KeyLayoutCore", targets: ["KeyLayoutCore"]),
-        .executable(name: "KeyLayoutFix", targets: ["KeyLayoutFix"]),
+        .executable(name: "Wend", targets: ["Wend"]),
     ],
     targets: [
         // Pure-Swift, platform-agnostic conversion + detection logic.
@@ -19,7 +19,7 @@ let package = Package(
         // macOS menu-bar app: platform shims (TIS/UCKeyTranslate, NSSpellChecker,
         // clipboard, hotkey, accessibility) + UI.
         .executableTarget(
-            name: "KeyLayoutFix",
+            name: "Wend",
             dependencies: ["KeyLayoutCore"]
         ),
         .testTarget(

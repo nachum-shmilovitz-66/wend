@@ -5,20 +5,20 @@
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:Wend}",
-            "name": "Debug KeyLayoutFix",
-            "target": "KeyLayoutFix",
+            "name": "Debug Wend",
+            "target": "Wend",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug KeyLayoutFix"
+            "preLaunchTask": "swift: Build Debug Wend"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:Wend}",
-            "name": "Release KeyLayoutFix",
-            "target": "KeyLayoutFix",
+            "name": "Release Wend",
+            "target": "Wend",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release KeyLayoutFix"
+            "preLaunchTask": "swift: Build Release Wend"
         }
     ]
 }

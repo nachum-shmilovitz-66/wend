@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build KeyLayoutFix and assemble a .app bundle. Optionally code-signs with the hardened
+# Build Wend and assemble a .app bundle. Optionally code-signs with the hardened
 # runtime if a signing identity is provided (required before notarization).
 #
 # Usage:
@@ -8,15 +8,15 @@
 #     bash scripts/package.sh               # build + bundle + sign (hardened runtime)
 #
 # Env overrides:
-#   BUNDLE_ID       default com.nachumsh.keylayoutfix
+#   BUNDLE_ID       default com.nachumsh.wend
 #   SHORT_VERSION   default 1.0
 #   BUILD_VERSION   default 1
 #   SIGN_IDENTITY   Developer ID Application identity (omit to skip signing)
 
 set -euo pipefail
 
-APP_NAME="KeyLayoutFix"
-BUNDLE_ID="${BUNDLE_ID:-com.nachumsh.keylayoutfix}"
+APP_NAME="Wend"
+BUNDLE_ID="${BUNDLE_ID:-com.nachumsh.wend}"
 SHORT_VERSION="${SHORT_VERSION:-1.0}"
 BUILD_VERSION="${BUILD_VERSION:-1}"
 

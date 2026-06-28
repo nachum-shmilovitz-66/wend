@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Notarize and staple a SIGNED KeyLayoutFix.app (run scripts/package.sh with SIGN_IDENTITY first).
+# Notarize and staple a SIGNED Wend.app (run scripts/package.sh with SIGN_IDENTITY first).
 #
 # One-time credential setup (stores an app-specific password in the keychain):
 #   1. Create an app-specific password at https://account.apple.com (Sign-In & Security).
@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-APP_NAME="KeyLayoutFix"
+APP_NAME="Wend"
 NOTARY_PROFILE="${NOTARY_PROFILE:-KLF-notary}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
