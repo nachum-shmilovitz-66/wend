@@ -63,7 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func fixNow() {
-        controller.performFix()
+        // Let the menu fully dismiss and the previous app regain focus before we
+        // synthesize ⌘C — otherwise the copy targets nothing and the fix no-ops.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.controller.performFix()
+        }
     }
 
     @objc private func toggleSwitchAfterFix() {
