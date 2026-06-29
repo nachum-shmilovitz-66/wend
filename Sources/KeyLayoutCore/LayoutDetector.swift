@@ -81,7 +81,7 @@ public struct LayoutDetector {
     }
 
     /// Split into runs of letters; drops whitespace, digits, and punctuation.
-    static func wordTokens(_ text: String) -> [String] {
+    public static func wordTokens(_ text: String) -> [String] {
         var tokens: [String] = []
         var current = ""
         for char in text {

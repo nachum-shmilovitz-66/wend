@@ -8,7 +8,6 @@ final class FixController {
     private let inputSources = InputSourceProvider()
     private let selection = SelectionService()
     private let switcher = InputSourceSwitcher()
-    private let detector = LayoutDetector(validator: SpellWordValidator())
 
     var switchInputSourceAfterFix = true
 
@@ -20,6 +19,9 @@ final class FixController {
             return
         }
         let currentID = inputSources.currentLayoutID()
+
+        // Built here (app fully launched, spell dictionaries ready), not at app init.
+        let detector = LayoutDetector(validator: SpellWordValidator())
 
         var chosen: ConversionCandidate?
         let didReplace = selection.transformSelection { text in
