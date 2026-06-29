@@ -130,6 +130,18 @@ bash scripts/make_pkg.sh         # -> dist/Wend-<version>.pkg
 Alternative: a styled drag-to-Applications **`.dmg`** — `bash scripts/make_dmg.sh`
 (-> `dist/Wend-<version>.dmg`). Unlike the pkg it can't auto-launch the app after copy.
 
+## Uninstall
+
+macOS `.pkg` installers are install-only — there's no built-in uninstall. To remove Wend,
+toggle **Launch at Login** off in its menu first, then run:
+
+```sh
+bash scripts/uninstall.sh        # quits Wend, removes the app, receipt, and user data
+```
+
+Or manually: quit Wend, drag `/Applications/Wend.app` to the Trash, and remove it from
+System Settings ▸ General ▸ Login Items.
+
 ## Roadmap
 
 - **Automatic mode** — a `CGEventTap` keystroke buffer that auto-fixes on word boundary
