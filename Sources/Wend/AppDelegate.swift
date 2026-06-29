@@ -60,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         axItem.target = self
 
         menu.addItem(.separator())
+        let about = menu.addItem(withTitle: "About Wend", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+
+        menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit Wend", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
 
@@ -82,6 +86,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openAccessibility() {
         permissions.openAccessibilitySettings()
+    }
+
+    @objc private func showAbout() {
+        // Accessory (LSUIElement) app: bring it forward so the panel isn't hidden.
+        NSApp.activate(ignoringOtherApps: true)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let credits = NSAttributedString(
+            string: "Created by Shmilovitz",
+            attributes: [.font: NSFont.systemFont(ofSize: 11),
+                         .foregroundColor: NSColor.secondaryLabelColor]
+        )
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Wend",
+            .applicationVersion: version,
+            .credits: credits,
+        ])
     }
 
     @objc private func quit() {
