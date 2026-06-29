@@ -112,4 +112,61 @@ final class LayoutDetectorTests: XCTestCase {
     func testNilWhenNothingValid() {
         XCTAssertNil(detector.bestConversion(of: "xqzj", layouts: layouts, currentLayoutID: us.id))
     }
+
+    // MARK: - Source selection / regression coverage
+
+    /// Regression: after a fix, "Switch Layout After Fix" makes the active layout the
+    /// target. Undoing and re-fixing the same gibberish must still convert it, even though
+    /// the active layout is no longer the layout the text was typed under. (Previously the
+    /// detector tried only the active layout as a source and returned nothing.)
+    func testConvertsWhenActiveLayoutIsNotTheSource() {
+        // "akuo" was typed under US, but the active layout is now Hebrew (the prior target).
+        let result = detector.bestConversion(of: "akuo", layouts: layouts, currentLayoutID: he.id)
+        XCTAssertEqual(result?.converted, "שלום")
+        XCTAssertEqual(result?.source.id, us.id)
+        XCTAssertEqual(result?.target.id, he.id)
+    }
+
+    /// Same property for the German case (active layout = German, text typed under US).
+    func testGermanReFixAfterLayoutSwitch() {
+        let result = detector.bestConversion(of: "ywei", layouts: layouts, currentLayoutID: de.id)
+        XCTAssertEqual(result?.converted, "zwei")
+        XCTAssertEqual(result?.source.id, us.id)
+    }
+
+    /// With no active-layout hint, every layout is tried as a source.
+    func testDetectsWithoutCurrentLayoutHint() {
+        let result = detector.bestConversion(of: "akuo", layouts: layouts, currentLayoutID: nil)
+        XCTAssertEqual(result?.converted, "שלום")
+    }
+
+    /// An unknown currentLayoutID is ignored (treated as no hint), not a hard filter.
+    func testUnknownCurrentLayoutIDStillConverts() {
+        let result = detector.bestConversion(of: "akuo", layouts: layouts, currentLayoutID: "test.NOPE")
+        XCTAssertEqual(result?.converted, "שלום")
+    }
+
+    func testEmptyAndWhitespaceYieldNil() {
+        XCTAssertNil(detector.bestConversion(of: "", layouts: layouts, currentLayoutID: us.id))
+        XCTAssertNil(detector.bestConversion(of: "   \n\t", layouts: layouts, currentLayoutID: us.id))
+        XCTAssertNil(detector.bestConversion(of: "12 34!", layouts: layouts, currentLayoutID: us.id))
+    }
+
+    /// A single layout (or a layout with no language) gives nothing to convert to.
+    func testNoConversionWithFewerThanTwoLanguages() {
+        XCTAssertNil(detector.bestConversion(of: "akuo", layouts: [us], currentLayoutID: us.id))
+    }
+
+    /// Threshold: a partly-valid conversion below 0.5 is rejected.
+    func testBelowThresholdRejected() {
+        // Only 1 of 3 tokens maps to a real word -> ratio 0.33 < 0.5.
+        let strict = LayoutDetector(validator: validator, threshold: 0.5)
+        XCTAssertNil(strict.bestConversion(of: "akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id))
+    }
+
+    func testWordTokensSplitsOnNonLetters() {
+        XCTAssertEqual(LayoutDetector.wordTokens("akuo guko 12!"), ["akuo", "guko"])
+        XCTAssertEqual(LayoutDetector.wordTokens("  hi-there  "), ["hi", "there"])
+        XCTAssertEqual(LayoutDetector.wordTokens(""), [])
+    }
 }
