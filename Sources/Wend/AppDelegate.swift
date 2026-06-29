@@ -1,6 +1,7 @@
 // AppDelegate (macOS): menu-bar item + wiring. No Dock icon (accessory activation policy).
 
 import AppKit
+import ServiceManagement
 
 private let switchAfterFixKey = "switchInputSourceAfterFix"
 
@@ -10,10 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeys = HotkeyManager()
     private let permissions = PermissionsManager()
     private var switchItem: NSMenuItem!
+    private var loginItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let savedSwitch = UserDefaults.standard.object(forKey: switchAfterFixKey) as? Bool ?? true
         controller.switchInputSourceAfterFix = savedSwitch
+
+        enableLaunchAtLoginOnFirstRun()   // before the menu, so its checkmark is correct
 
         buildStatusItem()
 
@@ -52,6 +56,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switchItem.state = controller.switchInputSourceAfterFix ? .on : .off
         menu.addItem(switchItem)
 
+        loginItem = NSMenuItem(
+            title: "Launch at Login",
+            action: #selector(toggleLaunchAtLogin),
+            keyEquivalent: ""
+        )
+        loginItem.target = self
+        loginItem.state = launchAtLoginEnabled ? .on : .off
+        menu.addItem(loginItem)
+
         let axItem = menu.addItem(
             withTitle: "Open Accessibility Settings…",
             action: #selector(openAccessibility),
@@ -82,6 +95,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.switchInputSourceAfterFix.toggle()
         switchItem.state = controller.switchInputSourceAfterFix ? .on : .off
         UserDefaults.standard.set(controller.switchInputSourceAfterFix, forKey: switchAfterFixKey)
+    }
+
+    // MARK: - Launch at Login
+
+    private var launchAtLoginEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    /// First launch only: enable Launch at Login so Wend returns after a restart.
+    /// The user can turn it off from the menu afterwards — we never re-enable.
+    private func enableLaunchAtLoginOnFirstRun() {
+        let key = "didInitialLoginItemSetup"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        guard SMAppService.mainApp.status != .enabled else { return }
+        do {
+            try SMAppService.mainApp.register()
+            Log.write("enabled Launch at Login on first run")
+        } catch {
+            // register() only works from a proper, signed bundle (not `swift run`).
+            Log.write("first-run login-item register failed: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            // Registration only works from a proper, signed bundle (not `swift run`).
+            Log.write("launch-at-login toggle failed: \(error.localizedDescription)")
+            NSSound.beep()
+        }
+        loginItem.state = launchAtLoginEnabled ? .on : .off
     }
 
     @objc private func openAccessibility() {
