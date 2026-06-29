@@ -17,7 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         buildStatusItem()
 
-        hotkeys.onTrigger = { [weak self] in self?.controller.performFix() }
+        Log.write("launch axTrusted=\(permissions.isTrusted())")
+        hotkeys.onTrigger = { [weak self] in
+            Log.write("double-shift trigger")
+            self?.controller.performFix()
+        }
         hotkeys.start()
 
         if !permissions.isTrusted() {
