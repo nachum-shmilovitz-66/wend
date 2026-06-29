@@ -26,9 +26,11 @@ public struct LayoutDetector {
 
     /// Best conversion for `text`, or nil if nothing beats leaving it as-is.
     ///
-    /// - currentLayoutID: the active layout when the user typed. If known, it is the only
-    ///   plausible source (those characters came out of that layout), which is both more
-    ///   correct and cheaper. If nil, every layout is tried as a source.
+    /// - currentLayoutID: the active layout when the user typed. Used only as a tie-breaker
+    ///   (tried first, so it wins equal scores). Every layout is still tried as a source:
+    ///   the active layout isn't a reliable source — after a fix that switches the layout,
+    ///   or any manual switch, the selected text's characters no longer came out of it, and
+    ///   restricting to it would miss the real conversion (re-fixing after undo would fail).
     public func bestConversion(
         of text: String,
         layouts: [LayoutTable],
@@ -44,11 +46,10 @@ public struct LayoutDetector {
             originalScore = max(originalScore, validRatio(tokens, language: lang))
         }
 
-        let sources: [LayoutTable]
-        if let id = currentLayoutID, let current = layouts.first(where: { $0.id == id }) {
-            sources = [current]
-        } else {
-            sources = layouts
+        // Try every layout as a source, with the current one first so it wins ties.
+        var sources = layouts
+        if let id = currentLayoutID, let idx = sources.firstIndex(where: { $0.id == id }) {
+            sources.insert(sources.remove(at: idx), at: 0)
         }
 
         var best: ConversionCandidate?
