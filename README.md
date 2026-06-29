@@ -27,7 +27,7 @@ per-language code: it reads your actual system layouts at runtime.
 
 ```sh
 swift build
-swift test                          # 10 Core unit tests, no system dependency
+swift test                          # 18 Core unit tests, no system dependency
 swift run Wend --dump-layouts   # diagnostic: prints your live layouts + a sample fix
 ```
 
