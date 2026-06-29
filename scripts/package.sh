@@ -43,6 +43,13 @@ sed -e "s/__BUNDLE_ID__/$BUNDLE_ID/" \
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+# App icon (built by scripts/make_icon.sh -> Packaging/Wend.icns).
+if [ -f "$ROOT/Packaging/Wend.icns" ]; then
+    cp "$ROOT/Packaging/Wend.icns" "$APP/Contents/Resources/Wend.icns"
+else
+    echo "==> Note: Packaging/Wend.icns missing — run scripts/make_icon.sh for an app icon"
+fi
+
 if [ -n "${SIGN_IDENTITY:-}" ]; then
     echo "==> Signing with hardened runtime: $SIGN_IDENTITY"
     codesign --force --options runtime --timestamp \
