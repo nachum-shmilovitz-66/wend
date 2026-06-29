@@ -13,6 +13,7 @@ final class FixController {
 
     /// Fix the current selection. No-op (silent) if nothing is selected or no conversion wins.
     func performFix() {
+        Log.write("performFix start")
         let layouts = inputSources.installedLayouts()
         guard layouts.count >= 2 else {
             NSSound.beep() // need at least two layouts to convert between
@@ -25,12 +26,18 @@ final class FixController {
 
         var chosen: ConversionCandidate?
         let didReplace = selection.transformSelection { text in
+            Log.write("captured len=\(text.count)")
             guard let candidate = detector.bestConversion(
                 of: text, layouts: layouts, currentLayoutID: currentID
-            ) else { return nil }
+            ) else {
+                Log.write("no winning conversion")
+                return nil
+            }
+            Log.write("convert -> '\(candidate.converted.prefix(50))' score=\(candidate.score)")
             chosen = candidate
             return candidate.converted
         }
+        Log.write("didReplace=\(didReplace)")
 
         guard didReplace else { return }
         if switchInputSourceAfterFix, let target = chosen?.target {
