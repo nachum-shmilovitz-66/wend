@@ -78,7 +78,7 @@ DIST_XML="$WORK/distribution.xml"
 cat > "$DIST_XML" <<EOX
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>$APP_NAME $VERSION</title>
+    <title>$APP_NAME by Shmilovitz</title>
     <organization>$BUNDLE_ID</organization>
     <options customize="never" require-scripts="false"/>
     <welcome mime-type="text/plain">Installs $APP_NAME to your Applications folder and launches it.
