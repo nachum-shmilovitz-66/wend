@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.start()
 
         if !permissions.isTrusted() {
-            permissions.requestTrust()
+            permissions.requestTrust()   // pops the system Accessibility prompt on first launch
         }
     }
 
