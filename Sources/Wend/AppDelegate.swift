@@ -5,13 +5,14 @@ import ServiceManagement
 
 private let switchAfterFixKey = "switchInputSourceAfterFix"
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let controller = FixController()
     private let hotkeys = HotkeyManager()
     private let permissions = PermissionsManager()
     private var switchItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var axStatusItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let savedSwitch = UserDefaults.standard.object(forKey: switchAfterFixKey) as? Bool ?? true
@@ -42,6 +43,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false   // we set isEnabled on the status row ourselves
+
+        // Live status row: Accessibility trust. Informational when granted; a one-click
+        // shortcut to System Settings when it's missing. Refreshed in menuWillOpen.
+        axStatusItem = NSMenuItem(title: "Accessibility: …", action: #selector(openAccessibility), keyEquivalent: "")
+        axStatusItem.target = self
+        menu.addItem(axStatusItem)
+
+        menu.addItem(.separator())
+
         menu.addItem(withTitle: "Fix Selection  (⇧⇧)", action: #selector(fixNow), keyEquivalent: "")
             .target = self
 
@@ -80,7 +92,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = menu.addItem(withTitle: "Quit Wend", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
 
+        refreshStatus()   // set the initial status row before the menu is first shown
         statusItem.menu = menu
+    }
+
+    // MARK: - Status
+
+    /// Refresh the live status rows (Accessibility trust + Launch at Login) each time the
+    /// menu opens, so they reflect changes made in System Settings while Wend is running —
+    /// e.g. the Accessibility warning clears automatically once the user grants access.
+    private func refreshStatus() {
+        let trusted = permissions.isTrusted()
+
+        axStatusItem.title = trusted
+            ? "Accessibility: Granted"
+            : "Accessibility: Not granted — Open Settings…"
+        let symbol = trusted ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+        let color: NSColor = trusted ? .systemGreen : .systemOrange
+        let config = NSImage.SymbolConfiguration(paletteColors: [color])
+        axStatusItem.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        // Greyed-out (info only) when granted; clickable shortcut to Settings when not.
+        axStatusItem.isEnabled = !trusted
+
+        loginItem.state = launchAtLoginEnabled ? .on : .off
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshStatus()
     }
 
     @objc private func fixNow() {
