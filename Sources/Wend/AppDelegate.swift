@@ -2,6 +2,7 @@
 
 import AppKit
 import ServiceManagement
+import KeyLayoutCore
 
 private let switchAfterFixKey = "switchInputSourceAfterFix"
 
@@ -27,6 +28,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         wc.onOpenAccessibility = { [weak self] in self?.permissions.openAccessibilitySettings() }
         wc.onAbout = { [weak self] in self?.showAbout() }
         wc.onQuit = { [weak self] in self?.quit() }
+        wc.onFeedback = { [weak self] in self?.openFeedback() }
+        return wc
+    }()
+
+    private lazy var feedbackWindow: FeedbackWindowController = {
+        let wc = FeedbackWindowController()
+        wc.recipient = "nachumsh2@gmail.com"
+        wc.diagnostics = { [weak self] in self?.feedbackContext() ?? "" }
+        wc.logTail = { [weak self] in self?.wendLogTail() }
         return wc
     }()
 
@@ -108,6 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: ""
         )
         axItem.target = self
+
+        let feedbackItem = menu.addItem(withTitle: "Send Feedback…", action: #selector(openFeedback), keyEquivalent: "")
+        feedbackItem.target = self
 
         menu.addItem(.separator())
         let about = menu.addItem(withTitle: "About Wend", action: #selector(showAbout), keyEquivalent: "")
@@ -211,6 +224,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openAccessibility() {
         permissions.openAccessibilitySettings()
+    }
+
+    // MARK: - Feedback
+
+    @objc private func openFeedback() {
+        feedbackWindow.show()
+    }
+
+    /// Auto-collected diagnostics appended to a feedback email so reports are actionable.
+    private func feedbackContext() -> String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let layouts = InputSourceProvider().installedLayouts()
+            .map { $0.localizedName }.joined(separator: ", ")
+        let ax = permissions.isTrusted() ? "granted" : "not granted"
+        return "Wend \(version)\nmacOS: \(os)\nLayouts: \(layouts)\nAccessibility: \(ax)"
+    }
+
+    private func wendLogURL() -> URL? {
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Logs/Wend.log")
+    }
+
+    /// Recent tail of the log, inlined into feedback (a compose URL can't attach a file).
+    private func wendLogTail(maxChars: Int = 4000) -> String? {
+        guard let url = wendLogURL(),
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return text.count <= maxChars ? text : "…(truncated)\n" + String(text.suffix(maxChars))
     }
 
     @objc private func showAbout() {

@@ -23,6 +23,7 @@ final class SettingsWindowController: NSWindowController {
     var onOpenAccessibility: () -> Void = {}
     var onAbout: () -> Void = {}
     var onQuit: () -> Void = {}
+    var onFeedback: () -> Void = {}
 
     private var axIcon: NSImageView!
     private var axStatus: NSTextField!
@@ -96,14 +97,16 @@ final class SettingsWindowController: NSWindowController {
         loginCheckbox = NSButton(checkboxWithTitle: "Launch at Login",
                                  target: self, action: #selector(toggleLogin))
 
-        // Footer.
+        // Feedback + footer.
+        let feedbackButton = NSButton(title: "Send Feedback…", target: self, action: #selector(feedback))
+        feedbackButton.bezelStyle = .rounded
         let about = smallButton("About Wend", action: #selector(about))
         let quit = smallButton("Quit Wend", action: #selector(quit))
         let footer = row([spacer(), about, quit])
 
         let stack = NSStackView(views: [
             title, hint, separator(), axRow, separator(),
-            fixButton, switchCheckbox, loginCheckbox, separator(), footer,
+            fixButton, switchCheckbox, loginCheckbox, feedbackButton, separator(), footer,
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -123,7 +126,7 @@ final class SettingsWindowController: NSWindowController {
             stack.widthAnchor.constraint(equalToConstant: contentWidth),
         ])
         // Full-width rows: hint wraps, separators span, the trailing buttons right-align.
-        for v in [hint, axRow, fixButton, footer] as [NSView] {
+        for v in [hint, axRow, fixButton, feedbackButton, footer] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
         for s in stack.arrangedSubviews where (s as? NSBox)?.boxType == .separator {
@@ -184,4 +187,5 @@ final class SettingsWindowController: NSWindowController {
     @objc private func openAccessibility() { onOpenAccessibility(); refresh() }
     @objc private func about() { onAbout() }
     @objc private func quit() { onQuit() }
+    @objc private func feedback() { onFeedback() }
 }
