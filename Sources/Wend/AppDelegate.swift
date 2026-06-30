@@ -14,6 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var loginItem: NSMenuItem!
     private var axStatusItem: NSMenuItem!
 
+    /// Shown on reopen (relaunch while already running) and from the menu. Closures keep the
+    /// permission / login-item logic here in AppDelegate as the single source of truth.
+    private lazy var settingsWindow: SettingsWindowController = {
+        let wc = SettingsWindowController()
+        wc.isTrusted = { [weak self] in self?.permissions.isTrusted() ?? false }
+        wc.isSwitchAfterFix = { [weak self] in self?.controller.switchInputSourceAfterFix ?? false }
+        wc.isLoginEnabled = { [weak self] in self?.launchAtLoginEnabled ?? false }
+        wc.onFix = { [weak self] in self?.performFixSoon() }
+        wc.onToggleSwitchAfterFix = { [weak self] in self?.toggleSwitchAfterFix() }
+        wc.onToggleLogin = { [weak self] in self?.toggleLaunchAtLogin() }
+        wc.onOpenAccessibility = { [weak self] in self?.permissions.openAccessibilitySettings() }
+        wc.onAbout = { [weak self] in self?.showAbout() }
+        wc.onQuit = { [weak self] in self?.quit() }
+        return wc
+    }()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let savedSwitch = UserDefaults.standard.object(forKey: switchAfterFixKey) as? Bool ?? true
         controller.switchInputSourceAfterFix = savedSwitch
@@ -32,6 +48,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !permissions.isTrusted() {
             permissions.requestTrust()   // pops the system Accessibility prompt on first launch
         }
+    }
+
+    /// Wend is an accessory app, so relaunching it (e.g. double-clicking it in /Applications
+    /// while it's already running) is otherwise a silent no-op. Re-assert the menu-bar item and
+    /// show the window, so a relaunch always gives feedback — and a home if the icon can't be seen.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        ensureStatusItem()
+        settingsWindow.show()
+        return true
     }
 
     // MARK: - Menu
@@ -96,6 +121,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
     }
 
+    /// Rebuild the menu-bar item only if it's actually gone. (The common "can't see it" case is
+    /// the system hiding it — menu-bar overflow / the notch — which recreating can't fix; that's
+    /// what the window is for. This just covers a genuinely lost item, defensively.)
+    private func ensureStatusItem() {
+        if statusItem == nil || statusItem.button == nil {
+            buildStatusItem()
+        }
+    }
+
     // MARK: - Status
 
     /// Refresh the live status rows (Accessibility trust + Launch at Login) each time the
@@ -122,9 +156,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshStatus()
     }
 
-    @objc private func fixNow() {
-        // Let the menu fully dismiss and the previous app regain focus before we
-        // synthesize ⌘C — otherwise the copy targets nothing and the fix no-ops.
+    @objc private func fixNow() { performFixSoon() }
+
+    /// Let the menu/window fully dismiss and the previous app regain focus before we
+    /// synthesize ⌘C — otherwise the copy targets nothing and the fix no-ops.
+    private func performFixSoon() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.controller.performFix()
         }
