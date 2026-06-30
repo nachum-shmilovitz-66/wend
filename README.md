@@ -39,9 +39,16 @@ swift run Wend
 
 The first launch prompts for **Accessibility** access (System Settings ▸ Privacy &
 Security ▸ Accessibility) — required to simulate ⌘C/⌘V and watch for the hotkey. Then:
-select wrong-layout text in any app and **double-tap Shift**. A keyboard icon appears in
-the menu bar with: **Fix Selection** (same as double-Shift), **Switch Layout After Fix**,
-**Launch at Login**, **Open Accessibility Settings…**, and **About Wend**.
+select wrong-layout text in any app and **double-tap Shift**. A keyboard icon appears in the
+menu bar showing the live **Accessibility status** (granted / not granted) and a menu of:
+**Fix Selection** (same as double-Shift), **Switch Layout After Fix**, **Launch at Login**,
+**Open Accessibility Settings…**, **Send Feedback…**, and **About Wend**.
+
+Relaunching Wend (for example double-clicking it in `/Applications`), or whenever the menu-bar
+icon is hidden by menu-bar overflow or the notch, opens a small **control-panel window** that
+mirrors those controls — so the app always has a reachable home. **Send Feedback…** opens a
+prefilled Gmail compose with diagnostics (and, optionally, the recent log) so issues are easy
+to report.
 
 On first launch the app auto-enables **Launch at Login** (via `SMAppService`) so it returns
 after a restart; the menu toggle turns it off.
