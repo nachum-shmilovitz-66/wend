@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let permissions = PermissionsManager()
     private var switchItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var loggingItem: NSMenuItem!
     private var axStatusItem: NSMenuItem!
 
     /// Shown on reopen (relaunch while already running) and from the menu. Closures keep the
@@ -112,6 +113,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginItem.state = launchAtLoginEnabled ? .on : .off
         menu.addItem(loginItem)
 
+        loggingItem = NSMenuItem(
+            title: "Enable Diagnostic Logging",
+            action: #selector(toggleLogging),
+            keyEquivalent: ""
+        )
+        loggingItem.target = self
+        loggingItem.state = Log.isEnabled ? .on : .off
+        menu.addItem(loggingItem)
+
         let axItem = menu.addItem(
             withTitle: "Open Accessibility Settings…",
             action: #selector(openAccessibility),
@@ -183,6 +193,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.switchInputSourceAfterFix.toggle()
         switchItem.state = controller.switchInputSourceAfterFix ? .on : .off
         UserDefaults.standard.set(controller.switchInputSourceAfterFix, forKey: switchAfterFixKey)
+    }
+
+    @objc private func toggleLogging() {
+        Log.isEnabled.toggle()
+        loggingItem.state = Log.isEnabled ? .on : .off
     }
 
     // MARK: - Launch at Login
