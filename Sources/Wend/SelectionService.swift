@@ -13,6 +13,10 @@ final class SelectionService {
     /// preserved. Returns false if nothing was selected / copy failed / transform declined.
     @discardableResult
     func transformSelection(_ transform: (String) -> String?) -> Bool {
+        // Never touch a password / secure-input field — don't synthesize ⌘C against it, which
+        // would put the secret on the pasteboard. Silent no-op when secure input is active.
+        guard !IsSecureEventInputEnabled() else { return false }
+
         let saved = savePasteboard()
 
         guard let selected = copySelectedText() else {
@@ -25,9 +29,13 @@ final class SelectionService {
         }
 
         pasteText(replacement)
-        // Restore the user's clipboard once the paste has consumed our text.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.restorePasteboard(saved)
+        // Restore the user's clipboard once the paste has consumed our text. Capture the
+        // pasteboard directly (not self) so restore still runs even if the service is
+        // deallocated within the delay — otherwise the original clipboard would be lost.
+        let pb = pasteboard
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            pb.clearContents()
+            if !saved.isEmpty { pb.writeObjects(saved) }
         }
         return true
     }
@@ -48,8 +56,15 @@ final class SelectionService {
     }
 
     private func pasteText(_ text: String) {
+        // Mark this write concealed + transient so well-behaved clipboard managers skip storing
+        // it — it's ephemeral (restored in 0.25s) and may be sensitive. ⌘V still reads .string.
+        let concealed = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+        let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
         pasteboard.clearContents()
+        pasteboard.declareTypes([.string, concealed, transient], owner: nil)
         pasteboard.setString(text, forType: .string)
+        pasteboard.setString("", forType: concealed)
+        pasteboard.setString("", forType: transient)
         postKeyWithCommand(CGKeyCode(kVK_ANSI_V))
     }
 

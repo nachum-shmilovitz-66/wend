@@ -33,7 +33,8 @@ final class FixController {
                 Log.write("no winning conversion")
                 return nil
             }
-            Log.write("convert -> '\(candidate.converted.prefix(50))' score=\(candidate.score)")
+            // Log only metadata — never any substring of the user's text (it may be sensitive).
+            Log.write("convert score=\(candidate.score) len=\(candidate.converted.count)")
             chosen = candidate
             return candidate.converted
         }
