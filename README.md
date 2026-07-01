@@ -5,6 +5,9 @@ layout was active, so you got `akuo` — select it, double-tap **Shift**, and it
 `שלום`. Works for **any** language you have installed (Hebrew, Arabic, German, …) with no
 per-language code: it reads your actual system layouts at runtime.
 
+Release history is in [CHANGELOG.md](CHANGELOG.md); downloads are on the
+[Releases page](https://github.com/nachum-shmilovitz-66/wend/releases).
+
 ## How it works
 
 - **`KeyLayoutCore`** (pure Swift, no AppKit — portable to a future Windows port)
