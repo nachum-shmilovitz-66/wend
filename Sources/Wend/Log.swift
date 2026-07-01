@@ -9,12 +9,14 @@ enum Log {
     static func write(_ message: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date()))  \(message)\n"
         guard let data = line.data(using: .utf8) else { return }
-        if let handle = try? FileHandle(forWritingTo: url) {
-            handle.seekToEndOfFile()
-            handle.write(data)
-            try? handle.close()
-        } else {
-            try? data.write(to: url)
+        let fm = FileManager.default
+        // Create the log user-only (0600) so it isn't world-readable — it can carry diagnostics.
+        if !fm.fileExists(atPath: url.path) {
+            fm.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
         }
+        guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        handle.seekToEndOfFile()
+        handle.write(data)
+        try? handle.close()
     }
 }

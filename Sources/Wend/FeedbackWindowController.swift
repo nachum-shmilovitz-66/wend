@@ -74,7 +74,7 @@ final class FeedbackWindowController: NSWindowController {
 
         includeLog = NSButton(checkboxWithTitle: "Include recent log in the message",
                               target: nil, action: nil)
-        includeLog.state = .on
+        includeLog.state = .off   // opt-in: the log stays local unless the user asks to include it
 
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         cancel.bezelStyle = .rounded
