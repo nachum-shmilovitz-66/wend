@@ -22,7 +22,20 @@ final class SpellWordValidator: WordValidator {
     func isValidWord(_ word: String, language: String) -> Bool {
         guard supports(language) else { return false }
         guard wordMatchesScript(word, language: language) else { return false }
-        // A correctly-spelled word yields no misspelling range (location == NSNotFound).
+        if spelledCorrectly(word, language: language) { return true }
+
+        // Case matters to NSSpellChecker: it rejects "argentina" but accepts "Argentina".
+        // Layout conversion reproduces whatever the user typed, so it can't supply the
+        // capital — which would leave every lowercase proper noun (countries, cities, names,
+        // months) invisible to detection. Only the first letter is raised; `.capitalized`
+        // would lower the rest and break names like "McDonald".
+        let capitalized = word.prefix(1).uppercased() + word.dropFirst()
+        guard capitalized != word else { return false }
+        return spelledCorrectly(capitalized, language: language)
+    }
+
+    /// A correctly-spelled word yields no misspelling range (location == NSNotFound).
+    private func spelledCorrectly(_ word: String, language: String) -> Bool {
         let range = checker.checkSpelling(
             of: word,
             startingAt: 0,
