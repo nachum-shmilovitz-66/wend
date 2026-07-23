@@ -14,14 +14,10 @@ public struct LayoutDetector {
     public let validator: WordValidator
     /// Minimum valid-word ratio for a conversion to be offered at all.
     public let threshold: Double
-    /// Converted text must beat the original's own validity by at least this much,
-    /// so already-correct text is left untouched.
-    public let improvementMargin: Double
 
-    public init(validator: WordValidator, threshold: Double = 0.5, improvementMargin: Double = 0.0001) {
+    public init(validator: WordValidator, threshold: Double = 0.5) {
         self.validator = validator
         self.threshold = threshold
-        self.improvementMargin = improvementMargin
     }
 
     /// Best conversion for `text`, or nil if nothing beats leaving it as-is.
@@ -64,9 +60,15 @@ public struct LayoutDetector {
             }
         }
 
+        // Invoking the fix is an explicit "this text is wrong" from the user, so a conversion
+        // that merely ties the original is still offered. Requiring a strict improvement used
+        // to lose the common two-token case where exactly one token is valid on each side
+        // ("re ehcbv" -> "רק קיבנה": 0.5 vs 0.5), which failed silently. Text that already
+        // reads perfectly is still left untouched, and a conversion is never a step backwards.
         guard let candidate = best,
               candidate.score >= threshold,
-              candidate.score > originalScore + improvementMargin
+              originalScore < 1.0,
+              candidate.score >= originalScore
         else { return nil }
         return candidate
     }

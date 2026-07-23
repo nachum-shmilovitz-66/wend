@@ -2,6 +2,12 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.1] — 2026-07-23
+
+- **Fixed: the fix silently did nothing on some short two-word selections.** When the converted text scored exactly as well as what you typed — one recognized word on each side, e.g. `re ehcbv` → `רק קיבנה` — Wend required a strict improvement and gave up. Invoking the fix is an explicit "this is wrong", so a tie now converts. Text that already reads perfectly is still left untouched, and a conversion is never a step backwards.
+- **Fixed: line breaks were lost when fixing multi-line text in web editors.** Google Chat's compose box hands the clipboard a *flattened* plain-text copy — line breaks replaced by spaces — while keeping the real structure in the clipboard's HTML flavor. Wend read only the plain text, so the break was gone before conversion even started. It now reads the HTML flavor when one is present and recovers the line structure from it, and offers an HTML flavor of its own (using `<br>`) when pasting multi-line text back. As a safeguard, the HTML version of a selection is used only when it matches the plain text on everything except whitespace, so it can restore line breaks but never change your text. Single-line fixes and plain-text fields are unaffected.
+- Diagnostic log now records the line-break count (`nl=`) alongside the length, so a lost line break can be pinned to Wend or to the receiving app. Counts only — still no text content.
+
 ## [1.2.0] — 2026-07-01
 
 Privacy & security hardening (from a full security review).
@@ -27,6 +33,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.1]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.1
 [1.2.0]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.0
 [1.1.0]: https://github.com/nachum-shmilovitz-66/wend/tree/v1.1.0
 [1.0.0]: https://github.com/nachum-shmilovitz-66/wend/tree/v1.0.0
