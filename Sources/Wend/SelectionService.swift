@@ -5,6 +5,7 @@
 import AppKit
 import CoreGraphics
 import Carbon.HIToolbox
+import KeyLayoutCore
 
 final class SelectionService {
     private let pasteboard = NSPasteboard.general
@@ -52,7 +53,25 @@ final class SelectionService {
             RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
         }
         guard pasteboard.changeCount != startCount else { return nil }
-        return pasteboard.string(forType: .string)
+        guard let plain = pasteboard.string(forType: .string) else { return nil }
+
+        // Some web editors (Google Chat's compose box) flatten line breaks to spaces in the
+        // plain-text flavor while the html flavor still carries them as <div> blocks. Recover
+        // the structure from html — but only when the two agree on everything except
+        // whitespace, so html can restore line breaks and never alter the selected text.
+        if let html = pasteboard.string(forType: .html) {
+            let derived = HTMLPlainText.text(from: html)
+            if !derived.isEmpty, sameIgnoringWhitespace(derived, plain) {
+                if derived != plain { Log.write("capture via html (recovered line structure)") }
+                return derived
+            }
+        }
+        return plain
+    }
+
+    /// Same visible content, whitespace aside — the guard on trusting the html flavor.
+    private func sameIgnoringWhitespace(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.filter { !$0.isWhitespace } == rhs.filter { !$0.isWhitespace }
     }
 
     private func pasteText(_ text: String) {
@@ -60,9 +79,23 @@ final class SelectionService {
         // it — it's ephemeral (restored in 0.25s) and may be sensitive. ⌘V still reads .string.
         let concealed = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
         let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+
+        // Multi-line only: some web editors (Google Chat's compose box) collapse the bare LF
+        // in the plain-text flavor, losing the line break. An html flavor with <br> is
+        // unambiguous and rich-text consumers prefer it, while plain-text fields (Terminal,
+        // editors) still read .string exactly as before. Single-line text is untouched, so
+        // this can't regress the common path.
+        let multiline = text.contains(where: \.isNewline)
+
+        var types: [NSPasteboard.PasteboardType] = [.string, concealed, transient]
+        if multiline { types.insert(.html, at: 0) }
+
         pasteboard.clearContents()
-        pasteboard.declareTypes([.string, concealed, transient], owner: nil)
+        pasteboard.declareTypes(types, owner: nil)
         pasteboard.setString(text, forType: .string)
+        if multiline {
+            pasteboard.setString(PlainTextHTML.fragment(for: text), forType: .html)
+        }
         pasteboard.setString("", forType: concealed)
         pasteboard.setString("", forType: transient)
         postKeyWithCommand(CGKeyCode(kVK_ANSI_V))

@@ -80,6 +80,98 @@ final class LayoutMapperTests: XCTestCase {
     }
 }
 
+final class PlainTextHTMLTests: XCTestCase {
+    func testLineBreaksBecomeBrTags() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: "one\ntwo"), "one<br>two")
+        XCTAssertEqual(PlainTextHTML.fragment(for: "a\nb\nc"), "a<br>b<br>c")
+    }
+
+    /// CRLF is one Character in Swift, so it must not produce two breaks.
+    func testCarriageReturnsCountAsOneBreak() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: "one\r\ntwo"), "one<br>two")
+        XCTAssertEqual(PlainTextHTML.fragment(for: "one\rtwo"), "one<br>two")
+    }
+
+    func testMarkupCharactersAreEscaped() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: "a<b>&c"), "a&lt;b&gt;&amp;c")
+        XCTAssertEqual(PlainTextHTML.fragment(for: "\"x\" 'y'"), "&quot;x&quot; &#39;y&#39;")
+    }
+
+    /// Hebrew (and any non-ASCII) passes through untouched — the flavor is UTF-8.
+    func testNonASCIIPassesThrough() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: "שלום\nעולם"), "שלום<br>עולם")
+    }
+
+    func testEmptyAndPlainTextUnchanged() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: ""), "")
+        XCTAssertEqual(PlainTextHTML.fragment(for: "hello world"), "hello world")
+    }
+
+    /// A markup character carrying a combining mark is one Character but must still be
+    /// escaped — escaping is per scalar, so no raw "<" or "&" can reach the fragment.
+    func testMarkupCharacterWithCombiningMarkIsEscaped() {
+        XCTAssertEqual(PlainTextHTML.fragment(for: "<\u{0301}img"), "&lt;\u{0301}img")
+        XCTAssertEqual(PlainTextHTML.fragment(for: "&\u{0301}amp"), "&amp;\u{0301}amp")
+        XCTAssertFalse(PlainTextHTML.fragment(for: "<\u{200D}b>").contains("<b"))
+    }
+}
+
+final class HTMLPlainTextTests: XCTestCase {
+    /// The exact payload Google Chat puts on the clipboard for a two-line selection —
+    /// captured from the real pasteboard while diagnosing the lost-newline report.
+    func testGoogleChatDivBlocks() {
+        let html = "<meta charset='utf-8'><span><div>first line </div><div>second line </div></span>"
+        XCTAssertEqual(HTMLPlainText.text(from: html), "first line \nsecond line ")
+    }
+
+    func testBrBecomesNewline() {
+        XCTAssertEqual(HTMLPlainText.text(from: "one<br>two"), "one\ntwo")
+        XCTAssertEqual(HTMLPlainText.text(from: "one<br/>two"), "one\ntwo")
+        XCTAssertEqual(HTMLPlainText.text(from: "one<br />two"), "one\ntwo")
+    }
+
+    /// A block open emits a break only when text precedes it — no leading or trailing blank
+    /// lines, and nesting doesn't double up.
+    func testBlockEdgesDoNotProduceBlankLines() {
+        XCTAssertEqual(HTMLPlainText.text(from: "<div>a</div>"), "a")
+        XCTAssertEqual(HTMLPlainText.text(from: "<div><div>a</div></div>"), "a")
+        XCTAssertEqual(HTMLPlainText.text(from: "<p>a</p><p>b</p>"), "a\nb")
+    }
+
+    func testEntitiesAreDecoded() {
+        XCTAssertEqual(HTMLPlainText.text(from: "a&amp;b&lt;c&gt;d"), "a&b<c>d")
+        XCTAssertEqual(HTMLPlainText.text(from: "&quot;x&quot; &#39;y&#39;"), "\"x\" 'y'")
+        XCTAssertEqual(HTMLPlainText.text(from: "&#1513;&#x5DC;"), "של")
+    }
+
+    /// A bare ampersand is text, not a truncated entity, and must not swallow what follows.
+    func testBareAmpersandSurvives() {
+        XCTAssertEqual(HTMLPlainText.text(from: "a & b"), "a & b")
+        XCTAssertEqual(HTMLPlainText.text(from: "a &notanentity; b"), "a &notanentity; b")
+    }
+
+    func testAttributesAndQuotedAngleBracketsAreStripped() {
+        XCTAssertEqual(HTMLPlainText.text(from: "<span class='x>y'>text</span>"), "text")
+        XCTAssertEqual(HTMLPlainText.text(from: "<a href=\"http://e.com\">link</a>"), "link")
+    }
+
+    func testScriptAndStyleContentIsDropped() {
+        XCTAssertEqual(HTMLPlainText.text(from: "a<script>var x = 1;</script>b"), "ab")
+        XCTAssertEqual(HTMLPlainText.text(from: "a<style>.c { color: red }</style>b"), "ab")
+    }
+
+    /// Round-trips with its inverse, which is what the clipboard actually does.
+    func testRoundTripWithPlainTextHTML() {
+        let text = "שלום עולם\nsecond & <third>"
+        XCTAssertEqual(HTMLPlainText.text(from: PlainTextHTML.fragment(for: text)), text)
+    }
+
+    func testUnterminatedTagDoesNotHang() {
+        XCTAssertEqual(HTMLPlainText.text(from: "text<div"), "text")
+        XCTAssertEqual(HTMLPlainText.text(from: ""), "")
+    }
+}
+
 final class LayoutDetectorTests: XCTestCase {
     private let detector = LayoutDetector(validator: validator)
     private let layouts = [us, de, he]
@@ -155,6 +247,22 @@ final class LayoutDetectorTests: XCTestCase {
     /// A single layout (or a layout with no language) gives nothing to convert to.
     func testNoConversionWithFewerThanTwoLanguages() {
         XCTAssertNil(detector.bestConversion(of: "akuo", layouts: [us], currentLayoutID: us.id))
+    }
+
+    /// Regression: a conversion that ties the original's score is still offered. Real case
+    /// was "re ehcbv" -> "רק קיבנה" — one valid token on each side, 0.5 vs 0.5 — which the
+    /// old strict-improvement rule rejected, so the fix silently did nothing.
+    func testTiedScoreStillConverts() {
+        // "hello akuo": valid EN tokens 1/2, and converting US->HE also gives 1/2 ("שלום").
+        let result = detector.bestConversion(of: "hello akuo", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertEqual(result?.target.id, he.id)
+        XCTAssertEqual(result?.score ?? 0, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(result?.converted.hasSuffix("שלום"), true)
+    }
+
+    /// The tie rule must not fire on text that already reads perfectly.
+    func testFullyValidTextStillLeftAlone() {
+        XCTAssertNil(detector.bestConversion(of: "hello world", layouts: layouts, currentLayoutID: us.id))
     }
 
     /// Threshold: a partly-valid conversion below 0.5 is rejected.

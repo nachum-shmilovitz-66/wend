@@ -26,7 +26,7 @@ final class FixController {
 
         var chosen: ConversionCandidate?
         let didReplace = selection.transformSelection { text in
-            Log.write("captured len=\(text.count)")
+            Log.write("captured len=\(text.count) nl=\(text.filter(\.isNewline).count)")
             guard let candidate = detector.bestConversion(
                 of: text, layouts: layouts, currentLayoutID: currentID
             ) else {
@@ -34,7 +34,12 @@ final class FixController {
                 return nil
             }
             // Log only metadata — never any substring of the user's text (it may be sensitive).
-            Log.write("convert score=\(candidate.score) len=\(candidate.converted.count)")
+            // `nl` counts line breaks: comparing it against the captured count pins down
+            // whether a lost newline went missing inside Wend or in the receiving app.
+            Log.write("""
+                convert score=\(candidate.score) len=\(candidate.converted.count) \
+                nl=\(candidate.converted.filter(\.isNewline).count)
+                """)
             chosen = candidate
             return candidate.converted
         }
