@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Require a Jira issue key in the commit subject, so every change on this repo is
+# traceable to a ticket in project WND. Items live in Jira; GitHub holds code and
+# releases only — without the key in the message there is no link between them.
+#
+# Enabled per clone with:  git config core.hooksPath .githooks
+# Bypass once with:        git commit --no-verify
+set -euo pipefail
+
+MSG_FILE="$1"
+SUBJECT="$(head -1 "$MSG_FILE")"
+
+# Merges, reverts and autosquash commits are generated: they inherit the ticket of
+# whatever they act on and have none of their own.
+case "$SUBJECT" in
+    Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+if printf '%s' "$SUBJECT" | grep -qE '\bWND-[0-9]+\b'; then
+    exit 0
+fi
+
+cat >&2 <<EOF
+commit-msg: no Jira issue key in the subject.
+
+  subject: $SUBJECT
+
+Name the WND ticket this change belongs to, e.g.
+
+  WND-18 Add force-convert on repeat trigger
+
+With the "GitHub for Jira" app connected, smart-commit actions work too:
+
+  WND-18 #close Add force-convert on repeat trigger
+
+If this change genuinely has no ticket, file one — or bypass with:
+
+  git commit --no-verify
+EOF
+exit 1
