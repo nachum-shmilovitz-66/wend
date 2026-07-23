@@ -2,6 +2,12 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.2] — 2026-07-23
+
+- **Fix it anyway: double-tap Shift again to force a conversion.** Some text can't be recognised as words at all — a half-typed word (`argenti` on the way to *Argentina*), a search fragment, a name no dictionary carries — so Wend used to decline and appear to do nothing. Now, fixing again within 2 seconds of a rejected attempt converts the text regardless of what the dictionary thinks. The first attempt is unchanged, so nothing converts by accident.
+- **Fixed: lowercase proper nouns were never recognised.** macOS's spell checker accepts `Argentina` but rejects `argentina`, and layout conversion can only reproduce the capitalisation you typed — so countries, cities, names and months were invisible to detection. Words are now checked capitalised as well as as-typed.
+- **Fixed: installing an older build silently did nothing.** The installer marked the app version-checked, so installing over a newer copy skipped the app entirely while still reporting success. Installers now always install the version they contain.
+
 ## [1.2.1] — 2026-07-23
 
 - **Fixed: the fix silently did nothing on some short two-word selections.** When the converted text scored exactly as well as what you typed — one recognized word on each side, e.g. `re ehcbv` → `רק קיבנה` — Wend required a strict improvement and gave up. Invoking the fix is an explicit "this is wrong", so a tie now converts. Text that already reads perfectly is still left untouched, and a conversion is never a step backwards.
@@ -33,6 +39,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.2]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.2
 [1.2.1]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.1
 [1.2.0]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.0
 [1.1.0]: https://github.com/nachum-shmilovitz-66/wend/tree/v1.1.0

@@ -73,6 +73,44 @@ public struct LayoutDetector {
         return candidate
     }
 
+    /// Best conversion ignoring the dictionary entirely — for when the user insists the text
+    /// is wrong after `bestConversion` declined (a half-typed word, a search fragment, a
+    /// proper noun no dictionary carries). Never returns a candidate that leaves the text
+    /// unchanged, so it can't "succeed" by pasting back exactly what was selected.
+    ///
+    /// Still prefers the highest-scoring pair, so when some conversion does produce real
+    /// words that one wins; scoreless ties fall to the pair that changes the most characters,
+    /// then to the active layout as the source.
+    public func forcedConversion(
+        of text: String,
+        layouts: [LayoutTable],
+        currentLayoutID: String? = nil
+    ) -> ConversionCandidate? {
+        let tokens = Self.wordTokens(text)
+        guard !tokens.isEmpty else { return nil }
+
+        var sources = layouts
+        if let id = currentLayoutID, let idx = sources.firstIndex(where: { $0.id == id }) {
+            sources.insert(sources.remove(at: idx), at: 0)
+        }
+
+        var best: ConversionCandidate?
+        var bestChanged = 0
+        for source in sources {
+            for target in layouts where target.id != source.id {
+                let converted = LayoutMapper.remap(text, from: source, to: target)
+                guard converted != text else { continue }
+                let score = target.languageCode.map { validRatio(Self.wordTokens(converted), language: $0) } ?? 0
+                let changed = zip(text, converted).reduce(0) { $1.0 == $1.1 ? $0 : $0 + 1 }
+                if best == nil || score > best!.score || (score == best!.score && changed > bestChanged) {
+                    best = ConversionCandidate(source: source, target: target, converted: converted, score: score)
+                    bestChanged = changed
+                }
+            }
+        }
+        return best
+    }
+
     /// Fraction of tokens recognized as words in `language`.
     private func validRatio(_ tokens: [String], language: String) -> Double {
         guard !tokens.isEmpty else { return 0 }

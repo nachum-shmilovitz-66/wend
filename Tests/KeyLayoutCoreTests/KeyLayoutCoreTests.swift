@@ -272,6 +272,39 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertNil(strict.bestConversion(of: "akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id))
     }
 
+    // MARK: - Forced conversion (repeat-trigger escalation)
+
+    /// The case that motivated it: a half-typed word no dictionary carries. bestConversion
+    /// declines; forcing converts anyway.
+    func testForcedConvertsWhatTheDictionaryRejects() {
+        // "akuoo" -> "שלומ" — not a word in the mock dictionary, so scoring gives up.
+        XCTAssertNil(detector.bestConversion(of: "akuoo", layouts: layouts, currentLayoutID: us.id))
+        let forced = detector.forcedConversion(of: "akuoo", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNotNil(forced)
+        XCTAssertNotEqual(forced?.converted, "akuoo")
+    }
+
+    /// Forcing still prefers a conversion that produces real words when one exists.
+    func testForcedPrefersHigherScore() {
+        let forced = detector.forcedConversion(of: "akuo", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertEqual(forced?.converted, "שלום")
+        XCTAssertEqual(forced?.target.id, he.id)
+        XCTAssertEqual(forced?.score ?? 0, 1.0, accuracy: 0.0001)
+    }
+
+    /// Never "succeeds" by handing back exactly what was selected.
+    func testForcedNeverReturnsUnchangedText() {
+        for text in ["akuo", "xqzj", "hello"] {
+            let forced = detector.forcedConversion(of: text, layouts: layouts, currentLayoutID: us.id)
+            XCTAssertNotEqual(forced?.converted, text, "forced conversion left \(text) unchanged")
+        }
+    }
+
+    func testForcedNeedsTokensAndATarget() {
+        XCTAssertNil(detector.forcedConversion(of: "  12 !", layouts: layouts, currentLayoutID: us.id))
+        XCTAssertNil(detector.forcedConversion(of: "akuo", layouts: [us], currentLayoutID: us.id))
+    }
+
     func testWordTokensSplitsOnNonLetters() {
         XCTAssertEqual(LayoutDetector.wordTokens("akuo guko 12!"), ["akuo", "guko"])
         XCTAssertEqual(LayoutDetector.wordTokens("  hi-there  "), ["hi", "there"])

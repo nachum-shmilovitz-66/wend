@@ -61,10 +61,18 @@ COMPONENT="$WORK/$APP_NAME-component.pkg"
 # so the Installer locates an existing copy (e.g. a dev build indexed by Spotlight)
 # and installs OVER it instead of into /Applications. BundleIsRelocatable=false
 # forces the install to the payload path.
+#
+# Disable version checking too. pkgbuild --analyze defaults BundleIsVersionChecked to
+# true, which makes the Installer skip the copy when the bundle already at that path is
+# newer than the payload — while still reporting success and writing a receipt. Installing
+# a deliberately older build (a rollback, or a renumbered release) then silently leaves the
+# newer app in place. An installer for version X should install version X.
 COMPONENT_PLIST="$WORK/component.plist"
 pkgbuild --analyze --root "$PAYLOAD" "$COMPONENT_PLIST" >/dev/null
-/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST" 2>/dev/null \
-    || plutil -replace 0.BundleIsRelocatable -bool false "$COMPONENT_PLIST"
+for key in BundleIsRelocatable BundleIsVersionChecked; do
+    /usr/libexec/PlistBuddy -c "Set :0:$key false" "$COMPONENT_PLIST" 2>/dev/null \
+        || plutil -replace "0.$key" -bool false "$COMPONENT_PLIST"
+done
 
 pkgbuild --root "$PAYLOAD" \
     --identifier "$BUNDLE_ID" \
