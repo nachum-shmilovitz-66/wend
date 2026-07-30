@@ -232,5 +232,27 @@ This build is not code-signed, so Windows SmartScreen may warn the first time yo
                 $names.Count, ((Get-Item $zip).Length / 1MB))
 }
 
+# --- Checksums -------------------------------------------------------------------
+#
+# The Windows artifacts are deliberately unsigned (WND-27), so there is no signature for
+# anyone to check. A published SHA-256 is the substitute: it does not prove who built the
+# file, but it does prove the download is the file that was built, which is the part a
+# mirror or a truncated download can get wrong. Written in `sha256sum` format so it can be
+# checked with the ordinary tools on either platform.
+
+$artifacts = Get-ChildItem $OutputDirectory -File |
+    Where-Object { $_.Extension -in '.msi', '.zip' } |
+    Sort-Object Name
+
+$sums = Join-Path $OutputDirectory "Wend-$shortVersion-SHA256SUMS.txt"
+$lines = foreach ($artifact in $artifacts) {
+    "{0}  {1}" -f (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash.ToLower(), $artifact.Name
+}
+Set-Content -Path $sums -Value $lines -Encoding ascii
+
+Write-Host ("built -> {0}" -f $sums)
+foreach ($line in $lines) { Write-Host "  $line" }
+
 Write-Host ''
-Write-Host 'unsigned: SmartScreen will warn on first run on another machine (WND-27)'
+Write-Host 'unsigned by design (WND-27): SmartScreen will warn on first run on another machine.'
+Write-Host 'The checksums above are what a user can verify instead.'
