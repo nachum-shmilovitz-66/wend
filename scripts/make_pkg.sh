@@ -36,6 +36,38 @@ cp -R "$APP" "$PAYLOAD/Applications/"
 # so it persists. Wend then pops the Accessibility prompt itself on first launch.
 SCRIPTS="$WORK/scripts"
 mkdir -p "$SCRIPTS"
+
+# preinstall: quit the running copy before the payload lands. Without this an upgrade
+# appears to do nothing — the old process keeps running from the replaced bundle, and
+# postinstall's `open` finds a live instance of the same bundle id and merely activates it
+# instead of launching the new build. Ask via an AppleEvent first so Wend tears down
+# cleanly (restores the clipboard, removes its event tap), and only force-kill if it
+# doesn't go. Quitting the app the user is upgrading is the point, so this is not
+# destructive; a fresh install has nothing to quit and the script is a no-op.
+cat > "$SCRIPTS/preinstall" <<'EOS'
+#!/bin/bash
+/usr/bin/pgrep -x Wend >/dev/null || exit 0
+
+loggedInUser=$(/usr/bin/stat -f %Su /dev/console)
+uid=$(/usr/bin/id -u "$loggedInUser")
+
+/bin/launchctl asuser "$uid" /usr/bin/osascript -e 'tell application "Wend" to quit' >/dev/null 2>&1
+for i in $(seq 1 10); do
+    /usr/bin/pgrep -x Wend >/dev/null || exit 0
+    sleep 0.5
+done
+
+# Still up after ~5s — the graceful path failed, so take it down hard.
+/usr/bin/pkill -x Wend >/dev/null 2>&1
+for i in $(seq 1 10); do
+    /usr/bin/pgrep -x Wend >/dev/null || exit 0
+    sleep 0.5
+done
+/usr/bin/pkill -9 -x Wend >/dev/null 2>&1
+exit 0
+EOS
+chmod +x "$SCRIPTS/preinstall"
+
 cat > "$SCRIPTS/postinstall" <<'EOS'
 #!/bin/bash
 APP="/Applications/Wend.app"
