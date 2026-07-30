@@ -14,7 +14,9 @@
 
 [CmdletBinding()]
 param(
-    # Where the staged folder goes. dist/ is gitignored, matching the macOS side.
+    # Where the staged folder goes. Under .build/ by default, beside the compiler's own
+    # output and gitignored with it: this is an intermediate, and dist/ is reserved for the
+    # thing you actually hand to someone — the installer make_setup_win.ps1 builds from it.
     [string] $OutputDirectory
 )
 
@@ -22,9 +24,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root 'dist\Wend' }
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root '.build\win-stage\Wend' }
 
-function Require-Command([string] $name, [string] $why) {
+function Assert-Command([string] $name, [string] $why) {
     $command = Get-Command $name -ErrorAction SilentlyContinue
     if (-not $command) { throw "$name not found on PATH — needed to $why." }
     return $command.Source
@@ -67,9 +69,9 @@ if (-not (Test-Path $ico)) {
 
 # --- Build -------------------------------------------------------------------------
 
-Require-Command 'swift' 'build the app' | Out-Null
-$python = Require-Command 'python' 'stamp and verify the PE resources'
-Require-Command 'dumpbin' 'discover which runtime DLLs to ship' | Out-Null
+Assert-Command 'swift' 'build the app' | Out-Null
+$python = Assert-Command 'python' 'stamp and verify the PE resources'
+Assert-Command 'dumpbin' 'discover which runtime DLLs to ship' | Out-Null
 
 Push-Location $root
 try {
@@ -149,6 +151,6 @@ if ($LASTEXITCODE -ne 0) { throw "resource verification failed — refusing to c
 
 $total = (Get-ChildItem $OutputDirectory | Measure-Object -Property Length -Sum)
 Write-Host ''
-Write-Host ("packaged -> {0}" -f $OutputDirectory)
+Write-Host ("staged -> {0}" -f $OutputDirectory)
 Write-Host ("{0} files, {1:N1} MB, {2} runtime DLLs" -f $total.Count, ($total.Sum / 1MB), $needed.Count)
-Write-Host 'unsigned: SmartScreen will warn on another machine (WND-27)'
+Write-Host 'runnable in place; scripts/make_setup_win.ps1 turns this into dist/Wend-<version>-x64.msi'

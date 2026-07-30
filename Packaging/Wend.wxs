@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows installer definition. Built by scripts/make_setup_win.ps1 with WiX 5.
+
+  A **per-user** install, deliberately. Wend is a per-user tray app: its settings live in
+  HKCU, and Launch at Login is an HKCU\...\Run value. Installing per-user puts it in
+  %LOCALAPPDATA%\Programs\Wend, so there is no UAC prompt at all — which matters more here
+  than on macOS, where the .pkg needs an admin password anyway. It also means one user
+  installing Wend cannot change anything for another.
+
+  The counterpart of scripts/make_pkg.sh.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?ifndef Version?><?define Version="0.0.0"?><?endif?>
+  <?ifndef PayloadDir?><?error PayloadDir must be defined?><?endif?>
+
+  <Package
+      Name="Wend"
+      Manufacturer="Nachum Shmilovitz"
+      Version="$(Version)"
+      Scope="perUser"
+      Compressed="yes"
+      Codepage="1252"
+      UpgradeCode="F95E1F20-18D8-4DB1-B194-AD1BA106A27B">
+
+    <SummaryInformation Description="Fix text typed in the wrong keyboard layout" />
+
+    <!--
+      Upgrading replaces the old version rather than installing beside it. Scheduled
+      afterInstallValidate so the old files are gone before the new ones land, instead of
+      the two being reconciled file by file.
+    -->
+    <MajorUpgrade
+        Schedule="afterInstallValidate"
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of Wend is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Windows locks a running image, so installing over a running Wend would fail on the
+      copy. Ask it to close first. This is the counterpart of WND-24 on macOS, where an
+      upgrade that left the old copy running meant the new build never took effect.
+    -->
+    <util:CloseApplication
+        Id="CloseWend"
+        Target="Wend.exe"
+        CloseMessage="yes"
+        RebootPrompt="no"
+        PromptToContinue="no" />
+
+    <Icon Id="WendIcon" SourceFile="$(PayloadDir)\Wend.ico" />
+    <Property Id="ARPPRODUCTICON" Value="WendIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/nachum-shmilovitz-66/wend" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Wend" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!--
+      The executable is its own component so the shortcut and the post-install launch can
+      refer to it by id; everything else (the Swift runtime DLLs, the tray icon) is
+      harvested, since the exact set is decided by package_win.ps1 walking the import table
+      and would otherwise have to be kept in step here by hand.
+    -->
+    <Component Id="MainExecutable" Directory="INSTALLFOLDER"
+               Guid="7354668B-788A-4775-A3C6-E6B64CA3DEC0">
+      <File Id="WendExe" Source="$(PayloadDir)\Wend.exe" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Harvested by extension rather than a blanket wildcard, because the executable above
+      has to stay out of it and Files has no exclude. make_setup_win.ps1 fails the build if
+      the staged folder holds anything that is not .exe, .dll or .ico, so a new kind of
+      payload file cannot slip past this quietly.
+    -->
+    <ComponentGroup Id="PayloadFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(PayloadDir)\*.dll" />
+      <Files Include="$(PayloadDir)\*.ico" />
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder"
+               Guid="BEE95F60-FCA9-462F-875C-64D3E328ABFD">
+      <Shortcut Id="WendShortcut"
+                Name="Wend"
+                Description="Fix text typed in the wrong keyboard layout"
+                Target="[INSTALLFOLDER]Wend.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="WendIcon"
+                IconIndex="0" />
+      <!--
+        A per-user component needs an HKCU keypath. Deliberately not Software\Wend itself,
+        which is where the app keeps its own settings — uninstalling the installer's marker
+        must not look like a chance to tidy those away.
+      -->
+      <RegistryValue Root="HKCU" Key="Software\Wend\Installer" Name="Installed"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Launch at Login is written by the app itself, at HKCU\...\Run, and points at wherever
+      that copy of Wend.exe lives. Left behind by an uninstall it would be a login-time
+      command pointing at a deleted file, so remove it here. Removal only — the app owns
+      writing it, and an install must not turn the setting on behind the user's back.
+    -->
+    <Component Id="LoginItemCleanup" Directory="INSTALLFOLDER"
+               Guid="802ED04C-8AD1-431A-B44C-D033583B8B1A">
+      <RemoveRegistryValue Root="HKCU"
+                           Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                           Name="Wend" />
+      <RegistryValue Root="HKCU" Key="Software\Wend\Installer" Name="CleansLoginItem"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="Wend" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentGroupRef Id="PayloadFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="LoginItemCleanup" />
+    </Feature>
+
+    <!--
+      Start Wend once the install is done. It is a tray app with no window, so without this
+      an install appears to do nothing at all until the next sign-in. asyncNoWait because
+      the app runs until quit, and Impersonate so it lands in the user's session.
+    -->
+    <CustomAction Id="LaunchWend" FileRef="WendExe" ExeCommand=""
+                  Return="asyncNoWait" Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchWend" After="InstallFinalize" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

@@ -86,17 +86,41 @@ knowing:
 ## Package (Windows)
 
 ```sh
-pwsh -File scripts/package_win.ps1      # -> dist/Wend/
+pwsh -File scripts/make_setup_win.ps1   # -> dist/Wend-<version>-x64.msi
+pwsh -File scripts/package_win.ps1      # just the staged folder, no installer
 ```
 
 Run it where `swift build` already works — a Visual Studio developer prompt, or any shell
 with the Swift toolchain and the MSVC tools on `PATH`. It also needs Python (for the two
 resource scripts).
 
-Output is a **self-contained folder**, not an installer: `Wend.exe` with its icon and
-version stamped in, `Wend.ico` for the tray, and the Swift runtime DLLs it links against —
-found by walking the import table, so nothing ships that never loads. It runs on a machine
-with no Swift toolchain.
+`package_win.ps1` stages a **self-contained folder** under `.build/win-stage/Wend`:
+`Wend.exe` with its icon and version stamped in, `Wend.ico` for the tray, and the Swift
+runtime DLLs it links against — found by walking the import table, so nothing ships that
+never loads. It runs in place on a machine with no Swift toolchain.
+
+`make_setup_win.ps1` wraps that folder in an MSI (`Packaging/Wend.wxs`, built with WiX 5).
+`dist/` holds the installer and nothing else; the staged payload stays under `.build/` with
+the rest of the build output.
+
+The MSI is a **per-user** install to `%LOCALAPPDATA%\Programs\Wend`, so it needs no
+elevation — Wend keeps its settings in `HKCU` and its Launch at Login is an `HKCU\…\Run`
+value, so there is nothing it needs machine-wide. It adds a Start-menu shortcut, an
+Apps & Features entry, closes a running Wend before overwriting it (the counterpart of
+WND-24, since Windows locks a loaded image), starts the app when it finishes, and removes
+the Launch-at-Login value on uninstall so nothing is left pointing at a deleted exe.
+
+One-time tooling:
+
+```sh
+dotnet tool install --global wix
+wix extension add --global WixToolset.Util.wixext
+```
+
+> **Windows Server note.** A non-admin account on a Server SKU is refused a per-user MSI
+> outright — `Non-assigned apps are disabled for non-admin users`, error 1625. That is the
+> host's policy, not a fault in the package; on Windows 10/11 a per-user install needs no
+> privileges. Run the staged folder directly there instead.
 
 Two things a Windows executable carries as PE resources, which SwiftPM has no way to
 produce — it can't compile a resource script — so both are stamped in after the link, in
