@@ -60,6 +60,18 @@ public struct LayoutDetector {
             }
         }
 
+        // Nothing in the text reads as a word in any installed language, so the dictionary has
+        // no evidence either way and the threshold has nothing to measure. Declining here is
+        // what made the fix appear dead on words no dictionary carries — a proper noun or its
+        // prefix ("gdut" on the way to GDUtility), an acronym, a search fragment — while the
+        // user could see perfectly well that the text was wrong. Convert on the same evidence
+        // the forced path uses: highest score, then the pair changing the most characters.
+        // A conversion that turns out to be unwanted is undone by fixing again, since the
+        // result is equally scoreless and maps straight back.
+        if originalScore == 0 {
+            return forcedConversion(of: text, layouts: layouts, currentLayoutID: currentLayoutID)
+        }
+
         // Invoking the fix is an explicit "this text is wrong" from the user, so a conversion
         // that merely ties the original is still offered. Requiring a strict improvement used
         // to lose the common two-token case where exactly one token is valid on each side

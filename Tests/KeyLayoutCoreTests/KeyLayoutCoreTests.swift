@@ -201,8 +201,13 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertNil(detector.bestConversion(of: "hello", layouts: layouts, currentLayoutID: us.id))
     }
 
-    func testNilWhenNothingValid() {
-        XCTAssertNil(detector.bestConversion(of: "xqzj", layouts: layouts, currentLayoutID: us.id))
+    /// Text that reads as nothing in any installed language converts on the first attempt.
+    /// The dictionary has no evidence either way, and declining made the fix look dead on
+    /// words no dictionary carries (WND-22: "gdut" typed on the way to "GDUtility").
+    func testScorelessTextConvertsOnFirstAttempt() {
+        let result = detector.bestConversion(of: "xqzj", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNotNil(result)
+        XCTAssertNotEqual(result?.converted, "xqzj")
     }
 
     // MARK: - Source selection / regression coverage
@@ -265,23 +270,53 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertNil(detector.bestConversion(of: "hello world", layouts: layouts, currentLayoutID: us.id))
     }
 
-    /// Threshold: a partly-valid conversion below 0.5 is rejected.
+    /// Threshold: a partly-valid conversion below 0.5 is rejected. The original has to carry
+    /// a valid word of its own, otherwise the scoreless rule above applies and the threshold
+    /// never comes into it.
     func testBelowThresholdRejected() {
-        // Only 1 of 3 tokens maps to a real word -> ratio 0.33 < 0.5.
+        // Original "hello ..." is 1/4 valid EN. Converting US->HE also yields 1/4 ("שלום"),
+        // which is below the 0.5 threshold -> declined.
         let strict = LayoutDetector(validator: validator, threshold: 0.5)
-        XCTAssertNil(strict.bestConversion(of: "akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id))
+        XCTAssertNil(strict.bestConversion(of: "hello akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id))
     }
 
     // MARK: - Forced conversion (repeat-trigger escalation)
 
-    /// The case that motivated it: a half-typed word no dictionary carries. bestConversion
-    /// declines; forcing converts anyway.
+    /// A half-typed word no dictionary carries. Since WND-22 the normal path already handles
+    /// this — the text is scoreless in every language — and forcing agrees with it.
     func testForcedConvertsWhatTheDictionaryRejects() {
-        // "akuoo" -> "שלומ" — not a word in the mock dictionary, so scoring gives up.
-        XCTAssertNil(detector.bestConversion(of: "akuoo", layouts: layouts, currentLayoutID: us.id))
+        // "akuoo" -> "שלומ" — not a word in the mock dictionary, so it scores 0 either way.
+        let normal = detector.bestConversion(of: "akuoo", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNotNil(normal)
+        XCTAssertNotEqual(normal?.converted, "akuoo")
+
         let forced = detector.forcedConversion(of: "akuoo", layouts: layouts, currentLayoutID: us.id)
         XCTAssertNotNil(forced)
         XCTAssertNotEqual(forced?.converted, "akuoo")
+        XCTAssertEqual(forced?.converted, normal?.converted)
+    }
+
+    /// Forcing still has a job to do: when the original carries a valid word, the threshold
+    /// applies and the scoreless rule doesn't, so the first attempt declines and the repeat
+    /// trigger is what converts.
+    func testForcedStillNeededWhenOriginalHasValidWords() {
+        let text = "hello akuo xqzj wwww"
+        XCTAssertNil(detector.bestConversion(of: text, layouts: layouts, currentLayoutID: us.id))
+        let forced = detector.forcedConversion(of: text, layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNotNil(forced)
+        XCTAssertNotEqual(forced?.converted, text)
+    }
+
+    /// A scoreless conversion is reversible: fixing the result maps it straight back, which is
+    /// what makes converting on no evidence safe to do on the first attempt.
+    func testScorelessConversionIsReversible() {
+        guard let first = detector.bestConversion(of: "xqzj", layouts: layouts, currentLayoutID: us.id) else {
+            return XCTFail("expected a conversion for scoreless text")
+        }
+        let back = detector.bestConversion(
+            of: first.converted, layouts: layouts, currentLayoutID: first.target.id
+        )
+        XCTAssertEqual(back?.converted, "xqzj")
     }
 
     /// Forcing still prefers a conversion that produces real words when one exists.
