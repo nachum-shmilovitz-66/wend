@@ -2,6 +2,12 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.3] — 2026-07-30
+
+- **The menu bar menu now shows which version is running** — the *About Wend* item reads *About Wend 1.2.3*. Reporting a problem no longer means opening the About panel to find out what you're running. The About panel itself now shows the version alone too, without the build number after it.
+- **Fixed: text no dictionary recognises now converts on the first double-tap.** Words like `gdut` (on the way to *GDUtility*), acronyms, and search fragments read as nothing in any of your languages, so the fix used to decline and you had to double-tap Shift a second time to force it. When the text isn't a word in *any* installed language there is nothing for the dictionary to weigh, so it now converts straight away. Fixing again converts it back, so an unwanted conversion costs one more double-tap. Text that does contain real words is unchanged — it still takes the second double-tap to override.
+- **Fixed: installing an upgrade appeared to change nothing.** The installer copied the new app but left the old copy running, and because a copy was already running, the post-install launch just brought that old process to the front — so you kept using the previous version until the next login. The installer now quits the running copy before installing (asking it to quit first, so it shuts down cleanly), then launches the new one.
+
 ## [1.2.2] — 2026-07-23
 
 - **Fix it anyway: double-tap Shift again to force a conversion.** Some text can't be recognised as words at all — a half-typed word (`argenti` on the way to *Argentina*), a search fragment, a name no dictionary carries — so Wend used to decline and appear to do nothing. Now, fixing again within 2 seconds of a rejected attempt converts the text regardless of what the dictionary thinks. The first attempt is unchanged, so nothing converts by accident.
@@ -39,6 +45,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.3]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.3
 [1.2.2]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.2
 [1.2.1]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.1
 [1.2.0]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.0
