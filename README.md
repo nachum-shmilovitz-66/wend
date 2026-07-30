@@ -83,6 +83,41 @@ knowing:
 > Wend never writes captured text to disk on either platform, and the clipboard it borrows is
 > marked to stay out of clipboard history and off the cloud clipboard.
 
+## Package (Windows)
+
+```sh
+pwsh -File scripts/package_win.ps1      # -> dist/Wend/
+```
+
+Run it where `swift build` already works — a Visual Studio developer prompt, or any shell
+with the Swift toolchain and the MSVC tools on `PATH`. It also needs Python (for the two
+resource scripts).
+
+Output is a **self-contained folder**, not an installer: `Wend.exe` with its icon and
+version stamped in, `Wend.ico` for the tray, and the Swift runtime DLLs it links against —
+found by walking the import table, so nothing ships that never loads. It runs on a machine
+with no Swift toolchain.
+
+Two things a Windows executable carries as PE resources, which SwiftPM has no way to
+produce — it can't compile a resource script — so both are stamped in after the link, in
+packaging, the same place `package.sh` applies the icon and version on macOS:
+
+- the **icon**, drawn by Explorer, Task Manager and any shortcut;
+- the **version block**, read by Explorer's Details tab and by installers. `ProductVersion`
+  is the marketing string and `FileVersion` the build-precise one, mirroring
+  `CFBundleShortVersionString` and `CFBundleVersion`.
+
+The version comes from `SHORT_VERSION` / `BUILD_VERSION` in `scripts/package.sh` — one
+source for both platforms. `Sources/WendWin/Version.swift` has to carry the same string,
+because the running app shows it in its menu and in feedback reports; the script compares
+them and refuses to build on a mismatch. Afterwards it reads the icon and version back out
+of the linked exe and fails if either is wrong, the way `release.sh` refuses to emit an
+unsigned artifact.
+
+> **Not an installer, and not signed.** There is no `.msi`, no Start-menu entry, no
+> uninstall, and SmartScreen will warn on first run on another machine. That work is
+> tracked in WND-27.
+
 ## Run (macOS)
 
 ```sh
@@ -158,14 +193,22 @@ use **Developer ID Application** to keep Accessibility trust stable.
 
 ## App icon
 
-The icon (a double-Shift keycap) is generated from code; only the built `.icns` is
-committed (`Packaging/Wend.icns`). Regenerate it after editing `scripts/icon_render.swift`:
+The icon (a double-Shift keycap) is generated from code; only the built icons are committed
+(`Packaging/Wend.icns`, `Packaging/Wend.ico`). Regenerate them after editing
+`scripts/icon_render.swift`:
 
 ```sh
-bash scripts/make_icon.sh        # renders the icon -> Packaging/Wend.icns
+bash scripts/make_icon.sh                  # renders the icon -> Packaging/Wend.icns
+python scripts/make_icon_win.py            # Wend.icns -> Packaging/Wend.ico (needs Pillow)
 ```
 
-`package.sh` copies `Packaging/Wend.icns` into the bundle (`CFBundleIconFile = Wend`).
+The Windows icon is **downsampled from the same 1024×1024 render**, not drawn again, so the
+two platforms can't drift apart. It carries 16/24/32/48/64/128/256 so no shell ever has to
+stretch a badly matched size — `verify_resources.py` checks for exactly those.
+
+`package.sh` copies `Packaging/Wend.icns` into the bundle (`CFBundleIconFile = Wend`);
+`package_win.ps1` stamps `Packaging/Wend.ico` into the exe and stages a copy beside it for
+the tray.
 
 ## Build an installer
 
@@ -205,6 +248,5 @@ System Settings ▸ General ▸ Login Items.
 
 - **Automatic mode** — a `CGEventTap` keystroke buffer that auto-fixes on word boundary
   (needs password-field exclusion + undo). Reuses `KeyLayoutCore` unchanged.
-- **Windows port** — reimplement the `InputSourceProvider` / `SelectionService` shims
-  (`GetKeyboardLayoutList` + `ToUnicodeEx`, `SendInput`, `RegisterHotKey`); `KeyLayoutCore`
-  ports as-is.
+- **Windows installer** — the port itself is done, but it ships as a folder. An `.msi` with
+  a Start-menu entry, an uninstall, and an Authenticode signature is WND-27.
