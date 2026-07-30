@@ -86,8 +86,8 @@ knowing:
 ## Package (Windows)
 
 ```sh
-pwsh -File scripts/make_setup_win.ps1   # -> dist/Wend-<version>-x64.msi
-pwsh -File scripts/package_win.ps1      # just the staged folder, no installer
+pwsh -File scripts/make_setup_win.ps1   # -> dist/Wend-<version>-x64.msi + …-portable.zip
+pwsh -File scripts/package_win.ps1      # just the staged folder, no artifacts
 ```
 
 Run it where `swift build` already works — a Visual Studio developer prompt, or any shell
@@ -117,10 +117,22 @@ dotnet tool install --global wix
 wix extension add --global WixToolset.Util.wixext
 ```
 
-> **Windows Server note.** A non-admin account on a Server SKU is refused a per-user MSI
-> outright — `Non-assigned apps are disabled for non-admin users`, error 1625. That is the
-> host's policy, not a fault in the package; on Windows 10/11 a per-user install needs no
-> privileges. Run the staged folder directly there instead.
+### Portable zip
+
+`make_setup_win.ps1` also emits `dist/Wend-<version>-x64-portable.zip` — the same folder,
+plus a `README.txt`. Unzip anywhere and run `Wend.exe`; there is nothing to install and no
+administrator rights are involved.
+
+It exists because not every host will run the MSI. A non-admin account on a **Windows
+Server** SKU is refused a per-user package outright — `Non-assigned apps are disabled for
+non-admin users`, error 1625 — with no policy set; that is simply the SKU default, and
+locked-down corporate images do the same deliberately. Wend needs no installation to
+function, so the folder the installer would have laid down is worth shipping as it is.
+
+What the portable build gives up is only shell integration: no Start-menu entry, no
+Apps & Features entry, and no upgrade-in-place. Launch at Login points at wherever the
+folder was unzipped, so it has to be turned off before moving or deleting it — the bundled
+`README.txt` says so. `-SkipPortable` builds the MSI alone.
 
 Two things a Windows executable carries as PE resources, which SwiftPM has no way to
 produce — it can't compile a resource script — so both are stamped in after the link, in

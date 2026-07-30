@@ -20,6 +20,9 @@ param(
     # came from the current source; the version check below still applies.
     [switch] $SkipBuild,
 
+    # Skip the portable .zip and emit only the .msi.
+    [switch] $SkipPortable,
+
     # Staged payload to wrap. Defaults to package_win.ps1's own output location.
     [string] $PayloadDirectory,
 
@@ -142,4 +145,92 @@ Write-Host ''
 Write-Host ("built -> {0}" -f $msi)
 Write-Host ("version {0}, {1:N1} MB, per-user (no elevation), upgrade code {2}" -f `
             $builtVersion, ($size / 1MB), $upgradeCode)
+
+# --- Portable zip ----------------------------------------------------------------
+#
+# Not every host will run the MSI. A non-admin account on a Windows Server SKU is refused
+# a per-user package outright ("Non-assigned apps are disabled for non-admin users",
+# error 1625) with no policy set — it is simply the SKU default. Locked-down corporate
+# images do the same by policy. Wend needs no installation to work, so the folder it would
+# have installed is worth shipping as-is: unzip anywhere, run Wend.exe.
+#
+# What is lost without the installer is only the shell integration — no Start-menu entry,
+# no Apps & Features entry, no upgrade-in-place — so the note below says so rather than
+# leaving it to be discovered.
+
+if (-not $SkipPortable) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $zip = Join-Path $OutputDirectory "Wend-$shortVersion-x64-portable.zip"
+    if (Test-Path $zip) { Remove-Item $zip -Force }
+
+    # includeBaseDirectory, so unzipping yields a single Wend\ folder rather than spraying
+    # eighteen files into whatever directory the user happened to be in.
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        (Resolve-Path $PayloadDirectory).Path, $zip,
+        [System.IO.Compression.CompressionLevel]::Optimal, $true)
+
+    $readme = @"
+Wend $shortVersion - portable
+=============================
+
+Fix text typed in the wrong keyboard layout. Select the text and double-tap Shift.
+
+This is the portable build: there is nothing to install. Unzip this folder wherever
+you like and run Wend.exe. A keyboard icon appears in the notification area; its menu
+has Fix Selection, Switch Layout After Fix, Launch at Login, Enable Diagnostic Logging,
+Send Feedback and About.
+
+Wend needs no permission grant on Windows, and no administrator rights.
+
+Keep the folder together - Wend.exe needs the DLLs beside it, and reads Wend.ico for
+its tray icon.
+
+Because this is not an installed copy:
+
+  * there is no Start-menu entry and no Apps & Features entry;
+  * Launch at Login points at wherever you unzipped this, so turn it off from the menu
+    before moving or deleting the folder, or it will try to start a file that is gone;
+  * upgrading means replacing the folder yourself. Quit Wend first - Windows will not
+    let you overwrite a running program.
+
+To remove it: quit Wend from its menu (turning Launch at Login off first), then delete
+this folder.
+
+Settings live in HKCU\Software\Wend. The diagnostic log, when you switch it on, is at
+%LOCALAPPDATA%\Wend\Wend.log and records no part of your text - only lengths and counts.
+
+This build is not code-signed, so Windows SmartScreen may warn the first time you run it.
+"@
+
+    $archive = [System.IO.Compression.ZipFile]::Open($zip, 'Update')
+    try {
+        $entry = $archive.CreateEntry('Wend/README.txt')
+        $writer = New-Object System.IO.StreamWriter($entry.Open())
+        try { $writer.Write(($readme -replace "`r?`n", "`r`n")) } finally { $writer.Dispose() }
+    } finally {
+        $archive.Dispose()
+    }
+
+    # Same rule as the MSI: read back what was emitted rather than trusting that it worked.
+    $check = [System.IO.Compression.ZipFile]::OpenRead($zip)
+    try {
+        $names = $check.Entries | ForEach-Object { $_.FullName }
+        $staged = (Get-ChildItem -File $PayloadDirectory).Count
+        foreach ($required in 'Wend/Wend.exe', 'Wend/Wend.ico', 'Wend/README.txt') {
+            if ($names -notcontains $required) { throw "$required missing from $zip" }
+        }
+        if ($names.Count -ne $staged + 1) {
+            throw "zip holds $($names.Count) entries, expected $($staged + 1) (payload plus README)"
+        }
+    } finally {
+        $check.Dispose()
+    }
+
+    Write-Host ("built -> {0}" -f $zip)
+    Write-Host ("{0} files, {1:N1} MB, no install required" -f `
+                $names.Count, ((Get-Item $zip).Length / 1MB))
+}
+
+Write-Host ''
 Write-Host 'unsigned: SmartScreen will warn on first run on another machine (WND-27)'
