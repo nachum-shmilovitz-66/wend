@@ -56,6 +56,20 @@ touch behaviour that both share, change both layers or say plainly that you didn
 
 `KeyLayoutCore` is the only code both use. Keep it free of AppKit *and* WinSDK.
 
+**A platform fix stays in that platform's layer, and must be flagged as such.** Before making
+a change, say which side it lands on:
+
+- `Sources/Wend/` or `Sources/WendWin/` — one platform only. State that the other is
+  untouched, so nobody has to diff it to find out.
+- `Sources/KeyLayoutCore/`, `Package.swift`, `Tests/`, `Packaging/`, `scripts/` — **shared**.
+  Say so out loud, every time. These reach both platforms, only one of them can be built on
+  any given machine, and an unflagged shared change is a change nobody has compiled.
+
+This runs both ways: don't fix a Windows symptom in shared code when the Windows layer can
+carry it, and don't reach into `WendWin` for something the Mac needs. Where a fault is genuinely
+common to both — Core logic, or a behaviour the two layers are meant to mirror — fix both sides
+or say plainly which one you left alone and why.
+
 ## Tests
 
 `swift test` after every code change, not only at the end of a task.
