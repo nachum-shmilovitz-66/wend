@@ -144,6 +144,8 @@ final class SelectionService {
     /// are defined in virtual-key terms — the target app matches on VK_C whatever layout it is
     /// typing in, and a scan code would land on whichever key that layout puts there.
     private func sendControlShortcut(virtualKey: UInt16) {
+        waitForModifiersToClear()
+
         var inputs = [
             keyInput(virtualKey: UInt16(VK_CONTROL), keyUp: false),
             keyInput(virtualKey: virtualKey, keyUp: false),
@@ -153,6 +155,50 @@ final class SelectionService {
         _ = inputs.withUnsafeMutableBufferPointer {
             SendInput(UINT($0.count), $0.baseAddress, Int32(MemoryLayout<INPUT>.size))
         }
+    }
+
+    /// Hold off injecting until the user's own modifier keys are up.
+    ///
+    /// `SendInput` has no per-event modifier field: an injected key inherits whatever the
+    /// keyboard state happens to say. A Shift the user is still holding therefore turns Ctrl+C
+    /// into Ctrl+Shift+C, which is not copy in most apps — the clipboard never changes and the
+    /// attempt is reported as "no selection", while some apps take the bare character and type
+    /// a literal `c` into the text instead. macOS is not exposed to this at all: `CGEvent.flags`
+    /// replaces the modifier set for the event outright, so a held key cannot leak in.
+    ///
+    /// The trigger makes this the ordinary case rather than a corner one. It is a double *Shift*
+    /// tap detected on the second key-up, and the hook runs before that key-up reaches the
+    /// foreground app — so at the moment the fix starts, Shift is routinely still down as far as
+    /// the target is concerned, and on an unhurried release it is genuinely still held.
+    ///
+    /// Giving up after the timeout rather than refusing to fix: a keyboard with a stuck modifier,
+    /// or a remapper holding one down by design, would otherwise make Wend permanently dead.
+    private func waitForModifiersToClear(timeout: Double = 0.5) {
+        guard anyModifierDown() else { return }
+
+        let start = Date()
+        let deadline = start.addingTimeInterval(timeout)
+        while Date() < deadline {
+            // Pumping rather than sleeping: this thread owns the low-level keyboard hook, and
+            // Windows quietly removes a hook whose thread stops answering. Blocking here would
+            // cost the next trigger to buy this one.
+            pumpMessages(for: 0.01)
+            if !anyModifierDown() {
+                Log.write("waited \(Int(Date().timeIntervalSince(start) * 1000))ms for modifiers")
+                return
+            }
+        }
+        Log.write("modifiers still held after \(Int(timeout * 1000))ms — sending anyway")
+    }
+
+    /// Whether the user is holding any modifier. Deliberately reports only that much: which key
+    /// it is would be a record of what the user is typing, which WND-8 keeps this app clear of.
+    private func anyModifierDown() -> Bool {
+        for key in [VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN]
+        where GetAsyncKeyState(key) < 0 {
+            return true
+        }
+        return false
     }
 
     private func keyInput(virtualKey: UInt16, keyUp: Bool) -> INPUT {
