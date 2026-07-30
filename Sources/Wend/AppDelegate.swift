@@ -133,7 +133,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         feedbackItem.target = self
 
         menu.addItem(.separator())
-        let about = menu.addItem(withTitle: "About Wend", action: #selector(showAbout), keyEquivalent: "")
+
+        // Version rides on the About row rather than a row of its own: it identifies the
+        // running build at a glance for a bug report, without spending a menu line on it.
+        // Marketing version only — the build number is noise here, and feedback reports
+        // still carry it via feedbackContext().
+        let about = menu.addItem(
+            withTitle: "About Wend \(Self.shortVersion)",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
         about.target = self
 
         menu.addItem(.separator())
@@ -247,9 +256,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         feedbackWindow.show()
     }
 
+    // MARK: - Version
+
+    /// Marketing version from the bundle (`SHORT_VERSION` in scripts/package.sh).
+    /// `?` when running without a bundle, e.g. straight from `swift run`.
+    static var shortVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    /// Marketing version plus build number, e.g. `1.2.2 (5)` — the build number distinguishes
+    /// rebuilds of the same marketing version, which matters when triaging a report.
+    static var versionDisplay: String {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        guard let build, !build.isEmpty else { return shortVersion }
+        return "\(shortVersion) (\(build))"
+    }
+
     /// Auto-collected diagnostics appended to a feedback email so reports are actionable.
     private func feedbackContext() -> String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let version = Self.versionDisplay
         let os = ProcessInfo.processInfo.operatingSystemVersionString
         let layouts = InputSourceProvider().installedLayouts()
             .map { $0.localizedName }.joined(separator: ", ")
@@ -272,7 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showAbout() {
         // Accessory (LSUIElement) app: bring it forward so the panel isn't hidden.
         NSApp.activate(ignoringOtherApps: true)
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let version = Self.shortVersion
         let credits = NSAttributedString(
             string: "Created by Shmilovitz",
             attributes: [.font: NSFont.systemFont(ofSize: 11),
@@ -281,6 +306,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "Wend",
             .applicationVersion: version,
+            // AppKit appends CFBundleVersion in parentheses ("Version 1.2.3 (7)") unless
+            // this key is supplied. Blank it to show the marketing version alone; the build
+            // number is still carried in feedback reports via feedbackContext().
+            .version: "",
             .credits: credits,
         ])
     }
