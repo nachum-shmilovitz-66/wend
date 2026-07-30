@@ -1,5 +1,41 @@
 # Wend — working notes
 
+## In flight: finish the 1.2.4 release on macOS
+
+> **Temporary.** Delete this whole section once the release is published, and commit that
+> deletion. It is here because it is the one file a fresh session reads on its own.
+
+1.2.4 is the first release carrying a Windows build. Everything on the Windows side is done
+and pushed; the macOS half is not, and **no Mac has ever compiled the current
+`Package.swift`** — the port made it choose the app target by host OS, and only the Windows
+branch has ever run.
+
+**Do this in order:**
+
+1. `swift build && swift test` — before anything else. The manifest change is the one shared
+   thing the port touched, so let a problem surface on its own rather than halfway through a
+   signed build. 41 tests should pass. `Sources/WendWin/` and `Sources/CWinSpell/` sit in the
+   tree undeclared on macOS, which is expected and mirrors how `Sources/Wend/` sits undeclared
+   on Windows.
+2. `bash scripts/release.sh` with the usual identities. The version is **already bumped** —
+   `SHORT_VERSION=1.2.4`, `BUILD_VERSION=11` in `scripts/package.sh` — and `CHANGELOG.md`
+   already has the 1.2.4 entry, so do not bump either again.
+3. **Add the `.pkg` to the existing draft release — do not create a new one.** It is tagged
+   `v1.2.4` against `main`, and already holds `Wend-1.2.4-x64.msi`,
+   `Wend-1.2.4-x64-portable.zip` and `Wend-1.2.4-SHA256SUMS.txt`.
+4. Append the pkg's hash to the sums file and replace that asset — the file is in `sha256sum`
+   format, two spaces between hash and name:
+
+       shasum -a 256 dist/Wend-1.2.4.pkg
+
+5. Publish the draft. It was left unpublished on purpose: a published release carrying only
+   Windows downloads is worse for a Mac user to land on than no release at all.
+6. Delete this section, commit, push.
+
+**Known-good state to compare against:** Windows `main` is at the commit that added this
+section; `swift test` passes on Windows; the MSI installs and runs on Windows 10/11 (confirmed
+on a real machine), and the portable zip runs from a clean extract.
+
 ## Issue tracking
 
 Work items live in **Jira**, project **WND**, at `nachum-shmilovitz.atlassian.net`
