@@ -7,26 +7,43 @@ import CoreGraphics
 import Carbon.HIToolbox
 import KeyLayoutCore
 
+/// Why a fix attempt ended the way it did. A plain Bool couldn't tell "you had nothing
+/// selected" apart from "the conversion was declined", which made a failed fix
+/// indistinguishable in the log — the attempt appeared to vanish with no reason recorded.
+enum SelectionOutcome {
+    /// The selection was converted and pasted back.
+    case replaced
+    /// Secure input (a password field) is active — deliberately untouched.
+    case secureInput
+    /// ⌘C produced nothing: no selection, or the app didn't answer in time.
+    case noSelection
+    /// The copy landed but carried no text flavor (an image, a file promise).
+    case noTextFlavor
+    /// Text was captured, and `transform` chose not to change it.
+    case declined
+}
+
 final class SelectionService {
     private let pasteboard = NSPasteboard.general
 
     /// Copy the selection, run `transform`, paste the result back. Original clipboard is
-    /// preserved. Returns false if nothing was selected / copy failed / transform declined.
+    /// preserved. The outcome says whether it replaced anything, and if not, why.
     @discardableResult
-    func transformSelection(_ transform: (String) -> String?) -> Bool {
+    func transformSelection(_ transform: (String) -> String?) -> SelectionOutcome {
         // Never touch a password / secure-input field — don't synthesize ⌘C against it, which
         // would put the secret on the pasteboard. Silent no-op when secure input is active.
-        guard !IsSecureEventInputEnabled() else { return false }
+        guard !IsSecureEventInputEnabled() else { return .secureInput }
 
         let saved = savePasteboard()
 
-        guard let selected = copySelectedText() else {
+        let captured = copySelectedText()
+        guard case .text(let selected) = captured else {
             restorePasteboard(saved)
-            return false
+            return captured == .noTextFlavor ? .noTextFlavor : .noSelection
         }
         guard let replacement = transform(selected) else {
             restorePasteboard(saved)
-            return false
+            return .declined
         }
 
         pasteText(replacement)
@@ -38,12 +55,20 @@ final class SelectionService {
             pb.clearContents()
             if !saved.isEmpty { pb.writeObjects(saved) }
         }
-        return true
+        return .replaced
     }
 
     // MARK: - Copy / paste primitives
 
-    private func copySelectedText() -> String? {
+    /// Result of the ⌘C round-trip. Distinguishes "the clipboard never changed" (nothing was
+    /// selected) from "it changed but holds no text", which need different reports.
+    private enum Capture: Equatable {
+        case text(String)
+        case noSelection
+        case noTextFlavor
+    }
+
+    private func copySelectedText() -> Capture {
         let startCount = pasteboard.changeCount
         postKeyWithCommand(CGKeyCode(kVK_ANSI_C))
 
@@ -52,8 +77,8 @@ final class SelectionService {
         while pasteboard.changeCount == startCount && Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
         }
-        guard pasteboard.changeCount != startCount else { return nil }
-        guard let plain = pasteboard.string(forType: .string) else { return nil }
+        guard pasteboard.changeCount != startCount else { return .noSelection }
+        guard let plain = pasteboard.string(forType: .string) else { return .noTextFlavor }
 
         // Some web editors (Google Chat's compose box) flatten line breaks to spaces in the
         // plain-text flavor while the html flavor still carries them as <div> blocks. Recover
@@ -63,10 +88,10 @@ final class SelectionService {
             let derived = HTMLPlainText.text(from: html)
             if !derived.isEmpty, sameIgnoringWhitespace(derived, plain) {
                 if derived != plain { Log.write("capture via html (recovered line structure)") }
-                return derived
+                return .text(derived)
             }
         }
-        return plain
+        return .text(plain)
     }
 
     /// Same visible content, whitespace aside — the guard on trusting the html flavor.
