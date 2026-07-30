@@ -39,18 +39,33 @@ before releasing, and add a `CHANGELOG.md` entry with a matching link reference.
 
 `dist/` is gitignored; the `.pkg` ships as a GitHub release asset, not in the tree.
 
+## Platforms
+
+`Package.swift` selects the app target by **host OS**: `Wend` (AppKit) on macOS, `WendWin`
+(Win32 + the `CWinSpell` C shim) on Windows. Both build the product name `Wend`, so
+`swift build` / `swift run Wend` are the same commands either side. Neither platform can
+compile the other's sources, so a change to one is untested by the other's CI — when you
+touch behaviour that both share, change both layers or say plainly that you didn't.
+
+`KeyLayoutCore` is the only code both use. Keep it free of AppKit *and* WinSDK.
+
 ## Tests
 
 `swift test` after every code change, not only at the end of a task.
 
-Core logic lives in `KeyLayoutCore` and is platform-agnostic and unit-tested. The `Wend`
-target is the macOS layer (TIS/UCKeyTranslate, NSSpellChecker, clipboard, hotkeys) and has
-no test target — verify changes there against the real API in a scratch script, or in the
-running app via the diagnostic log.
+Core logic lives in `KeyLayoutCore` and is platform-agnostic and unit-tested. The platform
+targets (`Wend`, `WendWin`) have no test target — verify changes there against the real API in
+a scratch script, or in the running app via the diagnostic log.
+
+On Windows the toolchain is the swift.org one plus Visual Studio Build Tools; build from a
+developer command prompt. `--dump-layouts` also prints the installed spell-check
+dictionaries, which is usually the answer when every conversion scores zero.
 
 ## Diagnostic log
 
-`~/Library/Logs/Wend.log`, opt-in via the menu, off by default, size-capped, created 0600.
+`~/Library/Logs/Wend.log` on macOS (created 0600); `%LOCALAPPDATA%\Wend\Wend.log` on Windows,
+where the profile ACL already restricts it to the user. Opt-in via the menu, off by default,
+size-capped.
 
 It records **metadata only — never any substring of the user's text**. Keep it that way:
 lengths, counts, scores, and fixed strings are fine; anything derived from the content is

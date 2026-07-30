@@ -1,16 +1,19 @@
 # Wend
 
-Fix text typed in the wrong keyboard layout on macOS. You meant `שלום` but the English
-layout was active, so you got `akuo` — select it, double-tap **Shift**, and it becomes
-`שלום`. Works for **any** language you have installed (Hebrew, Arabic, German, …) with no
-per-language code: it reads your actual system layouts at runtime.
+Fix text typed in the wrong keyboard layout, on **macOS and Windows**. You meant `שלום` but
+the English layout was active, so you got `akuo` — select it, double-tap **Shift**, and it
+becomes `שלום`. Works for **any** language you have installed (Hebrew, Arabic, German, …) with
+no per-language code: it reads your actual system layouts at runtime.
 
 Release history is in [CHANGELOG.md](CHANGELOG.md); downloads are on the
 [Releases page](https://github.com/nachum-shmilovitz-66/wend/releases).
 
 ## How it works
 
-- **`KeyLayoutCore`** (pure Swift, no AppKit — portable to a future Windows port)
+One Core, two platform layers. Everything that decides *what* the text should become is
+shared; everything that touches the OS is written twice, once per platform.
+
+- **`KeyLayoutCore`** (pure Swift, no AppKit, no WinSDK — shared by both apps)
   - `LayoutTable` — physical-key ↔ character map for one layout.
   - `LayoutMapper` — re-map text as if the same keys were pressed under another layout.
   - `LayoutDetector` — pick the conversion that produces the most real words.
@@ -25,16 +28,62 @@ Release history is in [CHANGELOG.md](CHANGELOG.md); downloads are on the
   - `AppDelegate` — menu-bar UI (Fix Selection, Switch Layout After Fix, Launch at Login,
     About) and first-run Launch-at-Login via `SMAppService`.
   - `Log` — file logger at `~/Library/Logs/Wend.log` for support/diagnosis.
+- **`WendWin`** (Windows app) — the same pieces against Win32:
+  - `InputSourceProvider` — `GetKeyboardLayoutList` + `ToUnicodeEx`, keyed by **scan code**
+    (Windows virtual keys are layout-dependent, so they can't identify a physical key).
+  - `SpellWordValidator` — the Windows Spell Checking API via the `CWinSpell` C shim, plus
+    `ScriptGuard` in place of the Mac's exemplar character sets.
+  - `SelectionService` — clipboard round-trip (Ctrl+C → transform → Ctrl+V → restore).
+  - `HotkeyManager` — double-Shift via a `WH_KEYBOARD_LL` hook.
+  - `InputSourceSwitcher` — `WM_INPUTLANGCHANGEREQUEST` to the foreground window.
+  - `LaunchAtLogin` — the `HKCU\…\Run` value, the counterpart of `SMAppService`.
+  - `App` — tray icon, menu, and the hidden window the hook and clipboard hang off.
+  - `Log` — file logger at `%LOCALAPPDATA%\Wend\Wend.log`.
+
+The manifest picks the app by host OS, so each platform builds only its own layer.
 
 ## Build & test
 
 ```sh
 swift build
-swift test                          # 18 Core unit tests, no system dependency
-swift run Wend --dump-layouts   # diagnostic: prints your live layouts + a sample fix
+swift test                       # 41 Core unit tests, no system dependency
+swift run Wend --dump-layouts    # diagnostic: your live layouts, dictionaries + a sample fix
 ```
 
-## Run
+On Windows this needs the [swift.org toolchain](https://www.swift.org/install/windows/) and
+Visual Studio Build Tools; run it from a developer command prompt so the linker and the
+Windows SDK are on the path.
+
+## Run (Windows)
+
+```sh
+swift run Wend
+```
+
+A keyboard icon appears in the **notification area**, with a menu of **Fix Selection**,
+**Switch Layout After Fix**, **Launch at Login**, **Enable Diagnostic Logging**, **Send
+Feedback…**, **About Wend** and **Quit**. Select wrong-layout text in any app and
+**double-tap Shift**. Launching Wend a second time doesn't start a second copy — it asks the
+one already running to re-assert its tray icon, for when it's buried in the overflow area.
+
+Windows needs no permission grant for any of this. Two differences from macOS are worth
+knowing:
+
+- **Spell-check dictionaries are not all installed by default.** Detection needs one for each
+  language you convert *into*; without it that direction scores zero and the fix falls back to
+  the repeat-trigger force path. `--dump-layouts` prints what's installed. Add more under
+  Settings ▸ Time & language ▸ Language & region ▸ (language) ▸ Language options.
+- **Elevated windows can't be fixed** unless Wend is elevated too — Windows blocks synthesized
+  input across that boundary. Wend detects it, beeps, and says so in the log rather than
+  appearing to do nothing.
+
+> **Password fields:** macOS exposes a system-wide secure-input flag, and Wend refuses to run
+> against it. Windows has no equivalent, so the Windows build can only recognise a classic
+> Win32 password box (`ES_PASSWORD`); one in a browser or an Electron app is invisible to it.
+> Wend never writes captured text to disk on either platform, and the clipboard it borrows is
+> marked to stay out of clipboard history and off the cloud clipboard.
+
+## Run (macOS)
 
 ```sh
 swift run Wend
