@@ -7,7 +7,8 @@
 #   PKG_SIGN_IDENTITY="Developer ID Installer: ... (TEAMID)" \
 #     bash scripts/make_pkg.sh                                # signed (needs Installer cert)
 #
-# Output: dist/Wend-<version>.pkg
+# Output: dist/Wend-<version>-macOS.pkg — the platform belongs in the name, because both
+# platforms' artifacts sit side by side in one GitHub release.
 set -euo pipefail
 
 APP_NAME="Wend"
@@ -19,7 +20,7 @@ APP="$DIST/$APP_NAME.app"
 [ -d "$APP" ] || { echo "error: $APP not found — run scripts/package.sh first"; exit 1; }
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist" 2>/dev/null || echo "1.0.0")"
-PKG="$DIST/$APP_NAME-$VERSION.pkg"
+PKG="$DIST/$APP_NAME-$VERSION-macOS.pkg"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

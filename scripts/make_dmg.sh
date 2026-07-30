@@ -4,7 +4,7 @@
 # Run scripts/package.sh first (ideally Developer ID signed) to produce the .app.
 #
 # Usage:  bash scripts/make_dmg.sh
-# Output: dist/Wend-<version>.dmg  (version read from the app's Info.plist)
+# Output: dist/Wend-<version>-macOS.dmg  (version read from the app's Info.plist)
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ WIN_X=320; WIN_Y=180   # top-left of window on screen
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist" 2>/dev/null || echo "1.0.0")"
 VOL_NAME="$APP_NAME $VERSION"
-DMG="$DIST/$APP_NAME-$VERSION.dmg"
+DMG="$DIST/$APP_NAME-$VERSION-macOS.dmg"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"; hdiutil detach "/Volumes/$VOL_NAME" -quiet 2>/dev/null || true' EXIT

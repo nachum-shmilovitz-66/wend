@@ -161,4 +161,4 @@ $total = (Get-ChildItem $OutputDirectory | Measure-Object -Property Length -Sum)
 Write-Host ''
 Write-Host ("staged -> {0}" -f $OutputDirectory)
 Write-Host ("{0} files, {1:N1} MB, {2} runtime DLLs" -f $total.Count, ($total.Sum / 1MB), $needed.Count)
-Write-Host 'runnable in place; scripts/make_setup_win.ps1 turns this into dist/Wend-<version>-x64.msi'
+Write-Host 'runnable in place; scripts/make_setup_win.ps1 turns this into dist/Wend-<version>-windows-x64.msi'
