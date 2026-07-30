@@ -40,9 +40,10 @@ before releasing, and add a `CHANGELOG.md` entry with a matching link reference.
 `dist/` is gitignored; the `.pkg` ships as a GitHub release asset, not in the tree.
 
 On Windows, `scripts/make_setup_win.ps1` is the equivalent of `make_pkg.sh` — it stages via
-`package_win.ps1` into `.build/win-stage/` and emits `dist/Wend-<version>-x64.msi`. `dist/`
-holds the installer and nothing else. The icon and version are stamped into the exe as PE
-resources after the link, since SwiftPM can't compile a resource script.
+`package_win.ps1` into `.build/win-stage/` and emits two artifacts into `dist/`: a per-user
+`.msi`, and a portable `.zip` for hosts that refuse it (a non-admin account on a Server SKU
+is one, by SKU default rather than policy). The icon and version are stamped into the exe as
+PE resources after the link, since SwiftPM can't compile a resource script.
 
 Both scripts read the version from `scripts/package.sh`, so there is one source for both
 platforms — but `Sources/WendWin/Version.swift` has to be bumped alongside it, and they
