@@ -134,6 +134,34 @@ Apps & Features entry, and no upgrade-in-place. Launch at Login points at wherev
 folder was unzipped, so it has to be turned off before moving or deleting it — the bundled
 `README.txt` says so. `-SkipPortable` builds the MSI alone.
 
+### Unsigned, and why — plus how to check what you downloaded
+
+The Windows artifacts carry **no code signature**, so the first time you run either one
+Windows SmartScreen says *"Windows protected your PC"*. Choose **More info → Run anyway**.
+
+That is a deliberate decision rather than an oversight. Signing is load-bearing on macOS —
+Accessibility trust is keyed to the signing identity, so an unsigned rebuild loses it — but
+on Windows Wend needs no permission grant at all, so a certificate would buy nothing except
+the absence of that one dismissible prompt. An OV certificate costs real money *and* leaves
+the warning in place until download reputation accrues; an EV one clears it immediately but
+is hard to justify at this audience size. The decision is recorded in WND-27 and is worth
+revisiting if the warning starts costing real installs.
+
+The MSI is a per-user install, so there is no UAC elevation and therefore no
+"unknown publisher" elevation dialog — only SmartScreen.
+
+Since there is no signature to check, each release publishes
+`Wend-<version>-SHA256SUMS.txt` instead. That can't tell you *who* built a file, but it does
+tell you the download is byte-for-byte what was built — which is the part a mirror, a proxy
+or a truncated transfer gets wrong:
+
+```powershell
+Get-FileHash .\Wend-1.2.4-x64.msi -Algorithm SHA256
+```
+
+Compare the result with the matching line in the sums file. GitHub also records a SHA-256
+for every release asset, so the two can be checked against each other independently.
+
 Two things a Windows executable carries as PE resources, which SwiftPM has no way to
 produce — it can't compile a resource script — so both are stamped in after the link, in
 packaging, the same place `package.sh` applies the icon and version on macOS:
