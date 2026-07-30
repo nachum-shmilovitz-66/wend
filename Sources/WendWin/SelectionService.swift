@@ -146,16 +146,45 @@ final class SelectionService {
     private func sendControlShortcut(virtualKey: UInt16) {
         waitForModifiersToClear()
 
-        var inputs = [
+        let sequence = [
             keyInput(virtualKey: UInt16(VK_CONTROL), keyUp: false),
             keyInput(virtualKey: virtualKey, keyUp: false),
             keyInput(virtualKey: virtualKey, keyUp: true),
             keyInput(virtualKey: UInt16(VK_CONTROL), keyUp: true),
         ]
-        _ = inputs.withUnsafeMutableBufferPointer {
-            SendInput(UINT($0.count), $0.baseAddress, Int32(MemoryLayout<INPUT>.size))
+
+        // One event per call, spaced apart, rather than all four in a single batch.
+        //
+        // A batch is delivered with effectively one timestamp, and a Chromium-based app
+        // (Chrome, Edge, Electron) can then process the character key without ever observing
+        // Ctrl as held. The result is not a copy that failed: it is a literal `c` arriving as
+        // text, which *replaces whatever the user had selected* — the fix destroys the very
+        // thing it was invoked on, and the log only says "no selection", because the clipboard
+        // genuinely never changed.
+        //
+        // Spacing them is what a real keystroke looks like, and it is the only lever available:
+        // Win32 has no per-event modifier field to pin the state to, the way CGEventFlags does
+        // on macOS.
+        var delivered: UINT = 0
+        for (index, event) in sequence.enumerated() {
+            var input = event
+            delivered += SendInput(1, &input, Int32(MemoryLayout<INPUT>.size))
+            // Pumping rather than sleeping, for the same reason as the modifier wait: this
+            // thread owns the low-level hook and must keep answering.
+            if index < sequence.count - 1 { pumpMessages(for: Self.keyEventGap) }
+        }
+
+        // Previously discarded. A short count means the tail of the shortcut was swallowed —
+        // with Ctrl possibly left down — which is worth knowing about rather than guessing at.
+        if delivered != UINT(sequence.count) {
+            Log.write("SendInput delivered \(delivered)/\(sequence.count), error \(GetLastError())")
         }
     }
+
+    /// Gap between the individual key events of a synthesized shortcut. Long enough for an app
+    /// that samples modifier state to see Ctrl held, short enough to stay far inside the
+    /// clipboard round-trip's own timeout.
+    private static let keyEventGap = 0.02
 
     /// Hold off injecting until the user's own modifier keys are up.
     ///
