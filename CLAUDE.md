@@ -39,12 +39,17 @@ before releasing, and add a `CHANGELOG.md` entry with a matching link reference.
 
 `dist/` is gitignored; the `.pkg` ships as a GitHub release asset, not in the tree.
 
-Windows has no release path yet — no installer and no signing story (WND-27).
-`scripts/package_win.ps1` goes as far as a runnable folder in `dist/Wend/`, stamping the
-icon and the version into the exe as PE resources, since SwiftPM can't compile a resource
-script. It reads the version from `scripts/package.sh` too, so there is still one source
-for both platforms — but `Sources/WendWin/Version.swift` has to be bumped alongside it, and
-the script refuses to build when the two disagree.
+On Windows, `scripts/make_setup_win.ps1` is the equivalent of `make_pkg.sh` — it stages via
+`package_win.ps1` into `.build/win-stage/` and emits `dist/Wend-<version>-x64.msi`. `dist/`
+holds the installer and nothing else. The icon and version are stamped into the exe as PE
+resources after the link, since SwiftPM can't compile a resource script.
+
+Both scripts read the version from `scripts/package.sh`, so there is one source for both
+platforms — but `Sources/WendWin/Version.swift` has to be bumped alongside it, and they
+refuse to build when the two disagree.
+
+**Still no signing on Windows** (WND-27): the MSI is unsigned, so SmartScreen warns. There
+is no `release.sh` counterpart yet either.
 
 ## Platforms
 
