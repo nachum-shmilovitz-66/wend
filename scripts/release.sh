@@ -34,8 +34,29 @@ PKG="$ROOT/dist/Wend-$VERSION.pkg"
 
 echo "==> 4/4 Notarizing + stapling the installer"
 xcrun notarytool submit "$PKG" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$PKG"
+
+# Stapling a .pkg intermittently fails with "the written data did not validate" (error 73)
+# even after the notary service accepted the submission; retrying succeeds. Retry rather
+# than abort, so a transient failure doesn't cost a full rebuild + resubmission.
+for attempt in 1 2 3; do
+    if xcrun stapler staple "$PKG"; then break; fi
+    [ "$attempt" = 3 ] && { echo "error: stapling failed after 3 attempts"; exit 1; }
+    echo "==> Staple attempt $attempt failed; retrying in 15s"
+    sleep 15
+done
+
 xcrun stapler validate "$PKG"
 spctl --assess --type install --verbose=2 "$PKG"
+
+# Prune superseded installers. Only runs once the new .pkg is signed, notarized and
+# stapled above, so a failed build never deletes the last good artifact. Keeping older
+# .pkg files around invites installing the wrong one by accident when testing.
+shopt -s nullglob
+for old in "$ROOT"/dist/Wend-*.pkg; do
+    [ "$old" = "$PKG" ] && continue
+    echo "==> Removing superseded installer: $(basename "$old")"
+    rm -f "$old"
+done
+shopt -u nullglob
 
 echo "==> Release artifact ready (signed + notarized): $PKG"
