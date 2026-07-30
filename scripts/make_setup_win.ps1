@@ -1,6 +1,6 @@
 # make_setup_win.ps1 — build the Windows installer. The counterpart of make_pkg.sh.
 #
-#     pwsh -File scripts/make_setup_win.ps1        # -> dist/Wend-<version>-x64.msi
+#     pwsh -File scripts/make_setup_win.ps1        # -> dist/Wend-<version>-windows-x64.msi
 #
 # Stages the app with package_win.ps1 (unless -SkipBuild), then wraps that folder in an MSI
 # defined by Packaging/Wend.wxs. dist/ holds the installer and nothing else; the staged
@@ -90,12 +90,12 @@ if ($stampedVersion -ne $shortVersion) {
 # --- Build the MSI ---------------------------------------------------------------
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
-$msi = Join-Path $OutputDirectory "Wend-$shortVersion-x64.msi"
+$msi = Join-Path $OutputDirectory "Wend-$shortVersion-windows-x64.msi"
 
 # The .wixpdb is worth keeping — it is what a future patch or upgrade diff would be built
 # against — but it is build output, not something to hand anyone, so it goes under .build
 # with the staged payload rather than sitting in dist beside the installer.
-$pdb = Join-Path (Split-Path -Parent $PayloadDirectory) "Wend-$shortVersion-x64.wixpdb"
+$pdb = Join-Path (Split-Path -Parent $PayloadDirectory) "Wend-$shortVersion-windows-x64.wixpdb"
 
 & $wix.Source build `
     -arch x64 `
@@ -161,7 +161,7 @@ Write-Host ("version {0}, {1:N1} MB, per-user (no elevation), upgrade code {2}" 
 if (-not $SkipPortable) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-    $zip = Join-Path $OutputDirectory "Wend-$shortVersion-x64-portable.zip"
+    $zip = Join-Path $OutputDirectory "Wend-$shortVersion-windows-x64-portable.zip"
     if (Test-Path $zip) { Remove-Item $zip -Force }
 
     # includeBaseDirectory, so unzipping yields a single Wend\ folder rather than spraying

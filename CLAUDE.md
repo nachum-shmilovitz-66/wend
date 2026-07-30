@@ -49,6 +49,27 @@ Both scripts read the version from `scripts/package.sh`, so there is one source 
 platforms — but `Sources/WendWin/Version.swift` has to be bumped alongside it, and they
 refuse to build when the two disagree.
 
+### Every artifact names its platform
+
+One release now carries both platforms' downloads in a single list, where `Wend-1.2.4.pkg`
+next to `Wend-1.2.4-x64.msi` tells a visitor nothing about which one is theirs — `.pkg` and
+`.msi` are only obvious to someone who already knows. So the platform goes in the filename:
+
+    Wend-<version>-macOS.pkg                    Wend-<version>-windows-x64.msi
+    Wend-<version>-macOS.dmg                    Wend-<version>-windows-x64-portable.zip
+
+    Wend-<version>-SHA256SUMS.txt               (one file, covers both platforms)
+
+The word, not a parenthesis: `(mac)` and `(windows)` read well in a browser but come back as
+`%28mac%29` in the download URL, and PowerShell treats parentheses as syntax, so the
+`Get-FileHash` line in the release notes would need quoting to work.
+
+This applies to whichever platform is being packaged, so a change here belongs on both sides
+in the same commit — `make_pkg.sh` / `make_dmg.sh` / `release.sh` on macOS,
+`make_setup_win.ps1` on Windows. Renaming one platform's artifacts and not the other's is
+worse than the original problem, because then the naming looks deliberate and still doesn't
+say which is which.
+
 **Still no signing on Windows** (WND-27): the MSI is unsigned, so SmartScreen warns. There
 is no `release.sh` counterpart yet either.
 

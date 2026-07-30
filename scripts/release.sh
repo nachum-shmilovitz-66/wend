@@ -10,7 +10,7 @@
 #
 # Env overrides: NOTARY_PROFILE (default KLF-notary).
 #
-# Output: dist/Wend-<version>.pkg (signed, notarized, stapled) + a notarized dist/Wend.app.
+# Output: dist/Wend-<version>-macOS.pkg (signed, notarized, stapled) + a notarized dist/Wend.app.
 set -euo pipefail
 
 : "${SIGN_IDENTITY:?refusing to build an unsigned release — set SIGN_IDENTITY (Developer ID Application)}"
@@ -30,7 +30,7 @@ echo "==> 3/4 Building the signed installer"
 PKG_SIGN_IDENTITY="$PKG_SIGN_IDENTITY" bash "$ROOT/scripts/make_pkg.sh"
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")"
-PKG="$ROOT/dist/Wend-$VERSION.pkg"
+PKG="$ROOT/dist/Wend-$VERSION-macOS.pkg"
 
 echo "==> 4/4 Notarizing + stapling the installer"
 xcrun notarytool submit "$PKG" --keychain-profile "$NOTARY_PROFILE" --wait

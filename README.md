@@ -86,7 +86,7 @@ knowing:
 ## Package (Windows)
 
 ```sh
-pwsh -File scripts/make_setup_win.ps1   # -> dist/Wend-<version>-x64.msi + …-portable.zip
+pwsh -File scripts/make_setup_win.ps1   # -> dist/Wend-<version>-windows-x64.msi + …-portable.zip
 pwsh -File scripts/package_win.ps1      # just the staged folder, no artifacts
 ```
 
@@ -119,7 +119,7 @@ wix extension add --global WixToolset.Util.wixext
 
 ### Portable zip
 
-`make_setup_win.ps1` also emits `dist/Wend-<version>-x64-portable.zip` — the same folder,
+`make_setup_win.ps1` also emits `dist/Wend-<version>-windows-x64-portable.zip` — the same folder,
 plus a `README.txt`. Unzip anywhere and run `Wend.exe`; there is nothing to install and no
 administrator rights are involved.
 
@@ -156,7 +156,7 @@ tell you the download is byte-for-byte what was built — which is the part a mi
 or a truncated transfer gets wrong:
 
 ```powershell
-Get-FileHash .\Wend-1.2.4-x64.msi -Algorithm SHA256
+Get-FileHash .\Wend-1.2.4-windows-x64.msi -Algorithm SHA256
 ```
 
 Compare the result with the matching line in the sums file. GitHub also records a SHA-256
@@ -283,7 +283,7 @@ auto-enables **Launch at Login**.
 ```sh
 # sign the app (Developer ID), then build the installer
 SIGN_IDENTITY="Developer ID Application: Nachum Shmilovitz (96Y4LX7FVB)" bash scripts/package.sh
-bash scripts/make_pkg.sh         # -> dist/Wend-<version>.pkg
+bash scripts/make_pkg.sh         # -> dist/Wend-<version>-macOS.pkg
 ```
 
 - The pkg sets `BundleIsRelocatable=false`. Without it the Installer finds a dev build via
@@ -294,7 +294,7 @@ bash scripts/make_pkg.sh         # -> dist/Wend-<version>.pkg
 - postinstall logs to `/tmp/wend-postinstall.log` for diagnosis.
 
 Alternative: a styled drag-to-Applications **`.dmg`** — `bash scripts/make_dmg.sh`
-(-> `dist/Wend-<version>.dmg`). Unlike the pkg it can't auto-launch the app after copy.
+(-> `dist/Wend-<version>-macOS.dmg`). Unlike the pkg it can't auto-launch the app after copy.
 
 ## Uninstall
 
