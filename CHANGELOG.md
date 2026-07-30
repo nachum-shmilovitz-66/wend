@@ -2,6 +2,18 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.4] — 2026-07-30
+
+**Wend now runs on Windows.** Same app, same double-tap Shift, same trick: it reads the keyboard layouts you actually have installed and works out which conversion turns your text into real words. All the conversion and detection logic is the code the Mac has been using — only the parts that talk to the operating system are written twice — so the two behave identically by construction rather than by imitation.
+
+- **Windows build, as an installer or a portable folder.** `Wend-1.2.4-x64.msi` installs per user, so it never asks for an administrator password: Start-menu entry, uninstall entry, and it starts itself when it finishes. `Wend-1.2.4-x64-portable.zip` is the same thing with nothing to install — unzip it anywhere and run `Wend.exe`, which is the answer for machines whose policy refuses installers.
+- **No permission grant needed on Windows.** There is no counterpart of the macOS Accessibility prompt; it simply works once it's running. Layouts come from the ones you've added under Settings ▸ Time & language, and the tray menu carries the same controls as the menu-bar menu on the Mac — Fix Selection, Switch Layout After Fix, Launch at Login, Enable Diagnostic Logging, Send Feedback, About.
+- **Two differences worth knowing about on Windows.** Detection needs a spell-check dictionary for each language you convert *into*, and Windows doesn't install them all by default — add them under Language options. And text in a window running as administrator can't be fixed unless Wend is too; Windows blocks the keystrokes, so Wend beeps and says so in the log rather than appearing to do nothing.
+- **Password fields are less protected on Windows than on macOS.** macOS exposes a system-wide secure-input flag that Wend refuses to touch. Windows has no equivalent, so Wend can only recognise a classic Windows password box — one inside a browser or an Electron app is invisible to it. Wend still never writes your text to disk, and the clipboard it borrows is marked to stay out of clipboard history and off the cloud clipboard.
+- **Fixed (Windows): double-tapping Shift could type a stray `c` and destroy the selection.** In Chrome, Edge, VS Code and other Chromium-based apps, the copy Wend synthesizes arrived as a plain character instead of Ctrl+C — so a `c` replaced whatever you had selected, and the log recorded only that nothing was captured. Wend now paces the keystrokes it sends so the modifier is unmistakable, and waits for any key you're still holding to come up first.
+
+macOS is unchanged in this release — no macOS code was touched, and 1.2.4 behaves exactly as 1.2.3 did there.
+
 ## [1.2.3] — 2026-07-30
 
 - **A fix that has nothing to work on now says so.** Double-tapping Shift with nothing selected — most often straight after a successful fix, since pasting the result clears the selection — did nothing at all, with no sound and nothing in the diagnostic log to explain it. It now beeps, and the log names the reason instead of leaving you to infer it from a missing line. Password fields stay silent on purpose, and so does a conversion Wend declined, because fixing again within two seconds is the intended next step there.
@@ -47,6 +59,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.4]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.4
 [1.2.3]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.3
 [1.2.2]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.2
 [1.2.1]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.1

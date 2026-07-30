@@ -20,6 +20,7 @@ FileVersion is the build-precise one ("1.2.3.10").
 import ctypes
 import struct
 import sys
+import time
 from ctypes import wintypes
 
 RT_ICON = 3
@@ -166,6 +167,21 @@ def main() -> int:
     images, group = icon_resources(ico)
     version = version_resource(short, build)
 
+    # A freshly written executable is routinely held open for a moment by a virus scanner or
+    # the indexer, and the only symptom is "access is denied" from the commit at the end.
+    # Retrying costs nothing and turns a build that fails at random into one that doesn't;
+    # a genuine lock — the app actually running — still fails, just a second later.
+    for attempt in range(5):
+        try:
+            return stamp(exe, images, group, version, short, build)
+        except OSError as error:
+            if error.errno != 5 or attempt == 4:
+                raise
+            time.sleep(0.4)
+    return 1
+
+
+def stamp(exe, images, group, version, short, build) -> int:
     handle = kernel32.BeginUpdateResourceW(exe, False)
     if not handle:
         fail("BeginUpdateResource")
