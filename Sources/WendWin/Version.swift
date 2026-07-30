@@ -5,5 +5,5 @@
 // SHORT_VERSION in scripts/package.sh until the Windows packaging script exists to stamp it.
 
 enum Version {
-    static let short = "1.2.3"
+    static let short = "1.2.4"
 }

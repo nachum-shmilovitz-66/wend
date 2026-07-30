@@ -129,9 +129,17 @@ while ($pending.Count -gt 0) {
 
 # A running Wend holds its own image open, so the copy below would fail with a bare
 # "access is denied". Say why, rather than leaving it to be guessed at.
-$running = Get-Process -Name 'Wend' -ErrorAction SilentlyContinue
-if ($running) {
-    throw "Wend is running (PID $($running.Id -join ', ')) — quit it first; Windows locks a loaded image."
+#
+# Only a copy running *from the output directory* is a problem. An installed Wend going
+# about its business in %LOCALAPPDATA% locks a different file entirely, and refusing to
+# build because of it would mean quitting the app every time — which is exactly the sort of
+# needless ceremony that gets a check disabled.
+$conflicting = Get-Process -Name 'Wend' -ErrorAction SilentlyContinue | Where-Object {
+    $_.Path -and $_.Path.StartsWith($OutputDirectory, [StringComparison]::OrdinalIgnoreCase)
+}
+if ($conflicting) {
+    throw ("Wend is running from the output directory (PID {0}) — quit it first; " -f
+           ($conflicting.Id -join ', ')) + 'Windows locks a loaded image.'
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
