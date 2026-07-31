@@ -5,18 +5,21 @@
 // The macOS build creates the file 0600 explicitly. Here the directory is under LocalAppData,
 // which the profile's ACL already restricts to the user, so the file inherits that and there
 // is nothing to tighten. As on macOS: metadata only, never any substring of the user's text.
+//
+// That ACL is the whole of the protection, so the path is nil when LOCALAPPDATA is unset
+// rather than falling back to the temp directory: the fallback used to resolve somewhere whose
+// permissions nothing here had checked. Logging is opt-in diagnostics, so not writing at all is
+// the better answer than writing to a directory that might be shared.
 
 import WinSDK
 import Foundation
 
 enum Log {
-    static let url: URL = {
-        let base = ProcessInfo.processInfo.environment["LOCALAPPDATA"]
-            ?? NSTemporaryDirectory()
-        return URL(fileURLWithPath: base)
+    static let url: URL? = ProcessInfo.processInfo.environment["LOCALAPPDATA"].map {
+        URL(fileURLWithPath: $0)
             .appendingPathComponent("Wend")
             .appendingPathComponent("Wend.log")
-    }()
+    }
 
     private static let enabledKey = "diagnosticLoggingEnabled"
     private static let maxBytes = 512 * 1024
@@ -29,7 +32,7 @@ enum Log {
     }
 
     static func write(_ message: String) {
-        guard isEnabled else { return }
+        guard isEnabled, let url else { return }
         let line = "\(ISO8601DateFormatter().string(from: Date()))  \(message)\r\n"
         guard let data = line.data(using: .utf8) else { return }
 
@@ -50,6 +53,7 @@ enum Log {
 
     /// Keep the log bounded: when it exceeds the cap, trim to the most recent half.
     private static func rotateIfNeeded() {
+        guard let url else { return }
         let size = ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?
             .intValue ?? 0
         guard size > maxBytes, let data = try? Data(contentsOf: url) else { return }

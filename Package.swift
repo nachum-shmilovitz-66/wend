@@ -12,11 +12,15 @@ let appTargets: [Target] = [
     // The Windows spell-check API is COM-only. Driving a COM vtable from Swift is possible but
     // brittle; C behind a flat interface is the smaller, more legible surface.
     .target(name: "CWinSpell"),
+    // UI Automation is COM-only for the same reason, and gets the same treatment: it answers
+    // whether the focused element is a password field, which the Win32 style bit cannot do for
+    // a browser or an Electron app.
+    .target(name: "CWinUIA"),
     // Windows tray app: platform shims (GetKeyboardLayoutList/ToUnicodeEx, ISpellChecker,
-    // clipboard, low-level keyboard hook) + UI.
+    // IUIAutomation, clipboard, low-level keyboard hook) + UI.
     .executableTarget(
         name: "WendWin",
-        dependencies: ["KeyLayoutCore", "CWinSpell"],
+        dependencies: ["KeyLayoutCore", "CWinSpell", "CWinUIA"],
         linkerSettings: [
             .linkedLibrary("User32"),
             .linkedLibrary("Shell32"),

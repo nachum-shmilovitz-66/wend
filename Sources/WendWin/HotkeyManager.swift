@@ -15,12 +15,15 @@ final class HotkeyManager {
     /// inside it.
     var targetWindow: HWND?
     var triggerMessage: UINT = 0
+    /// Sent as the message's wParam; the window only acts on a trigger carrying it. See App.
+    var triggerCookie: WPARAM = 0
 
     private var hook: HHOOK?
 
     func start() {
         ShiftTapDetector.shared.targetWindow = targetWindow
         ShiftTapDetector.shared.triggerMessage = triggerMessage
+        ShiftTapDetector.shared.triggerCookie = triggerCookie
         hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboardHookProc, GetModuleHandleW(nil), 0)
         if hook == nil {
             Log.write("keyboard hook failed: \(GetLastError())")
@@ -53,6 +56,7 @@ private final class ShiftTapDetector {
 
     var targetWindow: HWND?
     var triggerMessage: UINT = 0
+    var triggerCookie: WPARAM = 0
 
     private let doubleTapInterval: DWORD = 400
     private let maximumHold: DWORD = 300
@@ -100,7 +104,7 @@ private final class ShiftTapDetector {
         if lastTapTime != 0, elapsed(from: lastTapTime, to: time) <= doubleTapInterval {
             lastTapTime = 0
             if let window = targetWindow, triggerMessage != 0 {
-                PostMessageW(window, triggerMessage, 0, 0)
+                PostMessageW(window, triggerMessage, triggerCookie, 0)
             }
         } else {
             lastTapTime = time

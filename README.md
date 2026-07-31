@@ -78,10 +78,13 @@ knowing:
   appearing to do nothing.
 
 > **Password fields:** macOS exposes a system-wide secure-input flag, and Wend refuses to run
-> against it. Windows has no equivalent, so the Windows build can only recognise a classic
-> Win32 password box (`ES_PASSWORD`); one in a browser or an Electron app is invisible to it.
-> Wend never writes captured text to disk on either platform, and the clipboard it borrows is
-> marked to stay out of clipboard history and off the cloud clipboard.
+> against it. Windows has no equivalent, so the Windows build asks two questions instead: UI
+> Automation, which sees a password box inside a browser or an Electron app, and the classic
+> `ES_PASSWORD` style as the fallback for when UI Automation can't answer. That covers where
+> passwords are actually typed, but it still relies on the app publishing the field as one,
+> which the macOS flag does not. Wend never writes captured text to disk on either platform,
+> and the clipboard it borrows is marked to stay out of clipboard history and off the cloud
+> clipboard.
 
 ## Package (Windows)
 

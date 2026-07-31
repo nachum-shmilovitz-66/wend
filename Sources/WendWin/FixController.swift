@@ -3,6 +3,7 @@
 
 import WinSDK
 import Foundation
+import CWinUIA
 import KeyLayoutCore
 
 final class FixController {
@@ -29,16 +30,19 @@ final class FixController {
 
     /// Do the expensive first-time work at launch instead of during the user's first fix.
     ///
-    /// Both halves are one-off: the ToUnicodeEx sweep across every installed layout, and
-    /// bringing up the COM apartment and loading a dictionary. Left where they fall, they land
-    /// in the middle of the first fix — between the copy and the paste — which is the one place
-    /// in the whole flow where a delay is not merely slow but wrong: the clipboard is in a
-    /// borrowed state and another app is waiting on a paste.
+    /// All of it is one-off: the ToUnicodeEx sweep across every installed layout, and bringing
+    /// up the COM apartment for the spell-checker and the UI Automation client. Left where they
+    /// fall, they land in the middle of the first fix — between the copy and the paste — which
+    /// is the one place in the whole flow where a delay is not merely slow but wrong: the
+    /// clipboard is in a borrowed state and another app is waiting on a paste.
     func prepare() {
         _ = inputSources.installedLayouts()
         // Any word will do; the point is to make the spell-checker exist.
         _ = SpellWordValidator().isValidWord("wend", language: "en")
-        Log.write("warmed up")
+        // Worth naming in the log: without a UIA client the password guard is back to the
+        // ES_PASSWORD check alone, which cannot see a browser or Electron password box.
+        let uia = wend_uia_init() != 0
+        Log.write("warmed up (uia=\(uia ? "ready" : "unavailable"))")
     }
 
     /// Fix the current selection. No-op (silent) if nothing is selected or no conversion wins.
