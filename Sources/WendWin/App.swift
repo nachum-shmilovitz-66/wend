@@ -5,6 +5,15 @@
 // window created here is never shown; it exists because the clipboard is opened against an
 // owner window, a low-level hook needs somewhere to post to, and a tray icon delivers its
 // notifications as window messages.
+//
+// That window is top-level and findable by class name, because a second launch has to find the
+// copy already running — and so, therefore, can anything else in the session, which can then
+// post to it. The two messages that actually act on the user's text carry a per-run value that
+// has to match, so being able to name the window is not enough to drive it. Moving them to a
+// message-only window instead does *not* work, however it reads: FindWindow returns those too
+// (measured, not assumed). Nothing here crosses a privilege boundary either way — a process
+// running as this user could synthesize the keystrokes itself — Wend simply declines to be the
+// more convenient way to do it.
 
 import WinSDK
 import Foundation
@@ -17,7 +26,15 @@ private let messageTray = UINT(WM_APP + 2)
 /// Sent by a second launch to the copy already running.
 private let messageReopen = UINT(WM_APP + 3)
 
-private let fixDelayTimer = UINT_PTR(1)
+/// Accompanies every `messageFix`, and has to match for it to be acted on. Fresh each run and
+/// never leaves the process, so it is not something another process can arrive at. Same idea as
+/// `wendInjectedSignature`, which marks Wend's own keystrokes for its own hook — except that one
+/// only has to be distinctive, and this one has to be unguessable.
+private let fixCookie = WPARAM.random(in: 1...WPARAM.max)
+
+/// Likewise unguessable, and for the same reason: a WM_TIMER carries the timer id as its wParam,
+/// so a fixed id would leave the delayed fix drivable by anything that could post one.
+private let fixDelayTimer = UINT_PTR.random(in: 1...UINT_PTR.max)
 
 private enum Command: UINT {
     case fix = 1
@@ -41,6 +58,8 @@ final class App {
     private let hotkeys = HotkeyManager()
     private var trayIcon: NOTIFYICONDATAW?
     private var instanceMutex: HANDLE?
+    /// How long a WM_COMMAND is accepted for — see showMenu. Nil until the first menu opens.
+    private var menuCommandsAcceptedUntil: Date?
 
     // MARK: - Lifecycle
 
@@ -61,6 +80,7 @@ final class App {
 
         hotkeys.targetWindow = window
         hotkeys.triggerMessage = messageFix
+        hotkeys.triggerCookie = fixCookie
         hotkeys.start()
 
         return messageLoop()
@@ -93,10 +113,11 @@ final class App {
         guard registered else { return false }
 
         // Top-level but never shown: the style omits WS_VISIBLE, and WS_EX_TOOLWINDOW keeps it
-        // out of the taskbar and the Alt-Tab list. A message-only window (HWND_MESSAGE) would
-        // be the tidier fit for something that only receives messages, except that those are
-        // invisible to cross-process window lookup — which is exactly how a second launch has
-        // to find the copy already running.
+        // out of the taskbar and the Alt-Tab list. A message-only window (HWND_MESSAGE) would be
+        // the tidier fit for something that only receives messages, except that a second launch
+        // has to find this one by class name. It would not hide it from anything either — a
+        // message-only window is still returned by FindWindow — which is why the fix messages
+        // carry a cookie instead of relying on the window being hard to reach.
         window = withWide(windowClassName) { className in
             withWide("Wend") { title in
                 CreateWindowExW(DWORD(WS_EX_TOOLWINDOW), className, title, 0,
@@ -129,9 +150,28 @@ final class App {
         lParam: LPARAM
     ) -> LRESULT? {
         switch message {
+        // Both of the messages that run a fix are gated on a value only this process knows, so
+        // finding the window is not enough to drive it. A mismatch is dropped rather than
+        // logged: the log is opt-in and something posting these in a loop should not be able to
+        // fill it.
         case messageFix:
+            guard wParam == fixCookie else { return nil }
             Log.write("double-shift trigger")
             controller?.performFix()
+            return 0
+
+        case UINT(WM_TIMER):
+            guard wParam == fixDelayTimer else { return nil }
+            KillTimer(window, fixDelayTimer)
+            controller?.performFix()
+            return 0
+
+        // Only in the window around the user opening the tray menu — see showMenu. Without this
+        // the cookie above buys nothing: WM_COMMAND carries `.fix`, which reaches the same
+        // performFix by asking Wend to start the timer itself.
+        case UINT(WM_COMMAND):
+            guard let until = menuCommandsAcceptedUntil, Date() < until else { return nil }
+            perform(command: Command(rawValue: UINT(wParam & 0xFFFF)))
             return 0
 
         case messageReopen:
@@ -146,16 +186,6 @@ final class App {
             if event == UINT(WM_LBUTTONUP) || event == UINT(WM_RBUTTONUP) {
                 showMenu()
             }
-            return 0
-
-        case UINT(WM_COMMAND):
-            perform(command: Command(rawValue: UINT(wParam & 0xFFFF)))
-            return 0
-
-        case UINT(WM_TIMER):
-            guard wParam == fixDelayTimer else { return nil }
-            KillTimer(window, fixDelayTimer)
-            controller?.performFix()
             return 0
 
         case UINT(WM_DESTROY):
@@ -286,7 +316,19 @@ final class App {
         // A tray menu that isn't owned by the foreground window doesn't dismiss when the user
         // clicks away from it; this is the documented workaround.
         SetForegroundWindow(window)
+        // Bracket the interval in which a WM_COMMAND from this menu can legitimately arrive;
+        // outside it the handler drops the message, which is what closes the last way in on the
+        // one window another process can find.
+        //
+        // The trailing second is not slack for its own sake. TrackPopupMenu pumps the menu
+        // itself and returns once it closes, but whether the selection arrives inside that pump
+        // or as a message posted to land just after it returns is not something this codebase
+        // can currently claim to know — and a gate that guessed wrong would silently stop every
+        // menu item working. Admitting both costs an attacker having to hit a one-second window
+        // that opens only when the user themselves opened the menu.
+        menuCommandsAcceptedUntil = .distantFuture
         TrackPopupMenu(menu, UINT(TPM_RIGHTBUTTON), point.x, point.y, 0, window, nil)
+        menuCommandsAcceptedUntil = Date().addingTimeInterval(1)
         PostMessageW(window, UINT(WM_NULL), 0, 0)
     }
 
@@ -356,7 +398,7 @@ final class App {
             Wend \(Version.short)
             Windows: \(windowsVersion())
             Layouts: \(layouts)
-            Logging: \(Log.isEnabled ? "on" : "off") (\(Log.url.path))
+            Logging: \(Log.isEnabled ? "on" : "off") (\(Log.url?.path ?? "unavailable"))
             """
     }
 

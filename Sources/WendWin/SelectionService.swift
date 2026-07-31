@@ -4,6 +4,7 @@
 
 import WinSDK
 import Foundation
+import CWinUIA
 import KeyLayoutCore
 
 /// Why a fix attempt ended the way it did. A plain Bool couldn't tell "you had nothing
@@ -403,15 +404,28 @@ final class SelectionService {
 
     // MARK: - Guards
 
-    /// True when focus is in a classic password field.
+    /// True when focus is in a password field.
     ///
-    /// This is weaker than the macOS check, and deliberately advertised as such: macOS exposes
-    /// a system-wide secure-input flag, Windows has no equivalent, so all that can be tested is
-    /// the ES_PASSWORD style of a Win32 edit control. A password box in a browser or an
-    /// Electron app is invisible to it. What still holds either way is that Wend never writes
-    /// captured text anywhere, and the clipboard it touches is marked to stay out of history
-    /// and off the cloud.
+    /// Two tests, and the weaker one is still here as the fallback. UI Automation is asked
+    /// first because it is the only one that can see a password box inside a browser or an
+    /// Electron app — which is where most passwords are actually typed, and the gap this check
+    /// used to have. It answers "don't know" (-1) when the client couldn't be created or the
+    /// target didn't respond in time, and that is not read as "not a password": the Win32 test
+    /// runs on 0 and on -1 alike, so the result can only ever be more protective than the
+    /// ES_PASSWORD check alone.
+    ///
+    /// Still weaker than macOS, which exposes a system-wide secure-input flag that covers every
+    /// app at once whether or not it publishes anything. What holds either way is that Wend
+    /// never writes captured text anywhere, and the clipboard it touches is marked to stay out
+    /// of history and off the cloud.
     private func isPasswordFieldFocused() -> Bool {
+        if wend_uia_focus_is_password() == 1 { return true }
+        return isClassicPasswordFieldFocused()
+    }
+
+    /// The ES_PASSWORD style of a Win32 edit control. Only meaningful on a classic control —
+    /// a password box in a browser or an Electron app is not a window and is invisible here.
+    private func isClassicPasswordFieldFocused() -> Bool {
         guard let foreground = GetForegroundWindow() else { return false }
         let foregroundThread = GetWindowThreadProcessId(foreground, nil)
         let ownThread = GetCurrentThreadId()
