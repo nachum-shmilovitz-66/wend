@@ -97,8 +97,8 @@ final class SettingsWindowController: NSWindowController {
         loginCheckbox = NSButton(checkboxWithTitle: "Launch at Login",
                                  target: self, action: #selector(toggleLogin))
 
-        // Feedback + footer.
-        let feedbackButton = NSButton(title: "Send Feedback…", target: self, action: #selector(feedback))
+        // Problem report / feedback + footer.
+        let feedbackButton = NSButton(title: "Report a Problem…", target: self, action: #selector(feedback))
         feedbackButton.bezelStyle = .rounded
         let about = smallButton("About Wend", action: #selector(about))
         let quit = smallButton("Quit Wend", action: #selector(quit))

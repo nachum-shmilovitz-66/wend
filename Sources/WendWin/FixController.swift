@@ -16,7 +16,7 @@ final class FixController {
     /// Fixing again this soon after a rejected attempt means "convert it anyway": the user is
     /// insisting the text is wrong, so the dictionary gets skipped. Chosen over a second
     /// hotkey because retrying is what people already do when nothing happens.
-    private let forceWindow: TimeInterval = 2
+    let forceWindow: TimeInterval = 2   // internal: a problem report records it
     private var lastRejectionAt: Date?
 
     /// A fix pumps the message loop while it waits for the clipboard, so a second double-Shift
@@ -51,15 +51,20 @@ final class FixController {
         isFixing = true
         defer { isFixing = false }
 
-        Log.write("performFix start")
         let now = Date()
         let force = lastRejectionAt.map { now.timeIntervalSince($0) <= forceWindow } ?? false
+        // The front app is the likeliest variable when a fix works in one place and not
+        // another. Its executable name names the app, not anything typed into it.
+        let sinceDecline = lastRejectionAt.map { "\(Int(now.timeIntervalSince($0) * 1000)) ms" } ?? "none"
+        Log.write("performFix start front=\(Self.foregroundExecutable()) force=\(force) sinceDecline=\(sinceDecline)")
         let layouts = inputSources.installedLayouts()
         guard layouts.count >= 2 else {
+            Log.write("skipped: \(layouts.count) layout(s) installed, need 2")
             MessageBeep(UINT(MB_OK))   // need at least two layouts to convert between
             return
         }
         let currentID = inputSources.currentLayoutID()
+        Log.write("layouts=\(layouts.count) current=\(currentID ?? "?")")
 
         // Built here rather than at app init, matching macOS: the spell-checker is asked for
         // the languages it supports, and that answer is only meaningful once COM is up.
@@ -68,13 +73,24 @@ final class FixController {
         var chosen: ConversionCandidate?
         let outcome = selection.transformSelection { text in
             Log.write("captured len=\(text.count) nl=\(text.filter(\.isNewline).count)")
-            var best = detector.bestConversion(of: text, layouts: layouts, currentLayoutID: currentID)
+            let decision = detector.decide(of: text, layouts: layouts, currentLayoutID: currentID)
+            // Scores and counts only. A decline here is the first half of "I had to press ⇧⇧
+            // twice", so the report needs the numbers it was declined on.
+            let ratio = { (value: Double) in String(format: "%.2f", value) }
+            Log.write("""
+                decision=\(decision.reason.rawValue) tokens=\(decision.tokenCount) \
+                original=\(ratio(decision.originalScore)) best=\(ratio(decision.bestScore)) \
+                threshold=\(ratio(decision.threshold))
+                """)
+            var best = decision.candidate
             if best == nil, force {
                 best = detector.forcedConversion(of: text, layouts: layouts, currentLayoutID: currentID)
                 if best != nil { Log.write("forced conversion (repeat trigger)") }
             }
             guard let candidate = best else {
-                Log.write("no winning conversion")
+                Log.write(force
+                    ? "no winning conversion, even forced"
+                    : "no winning conversion; ⇧⇧ again within \(Int(forceWindow)) s forces it")
                 return nil
             }
             // Log only metadata — never any substring of the user's text (it may be sensitive).
@@ -82,7 +98,8 @@ final class FixController {
             // whether a lost newline went missing inside Wend or in the receiving app.
             Log.write("""
                 convert score=\(candidate.score) len=\(candidate.converted.count) \
-                nl=\(candidate.converted.filter(\.isNewline).count)
+                nl=\(candidate.converted.filter(\.isNewline).count) \
+                source=\(candidate.source.id) target=\(candidate.target.id)
                 """)
             chosen = candidate
             return candidate.converted
@@ -124,5 +141,26 @@ final class FixController {
         if switchInputSourceAfterFix, let target = chosen?.target {
             switcher.selectLayout(id: target.id)
         }
+    }
+
+    /// `chrome.exe` for the foreground window's process, or `?` when Windows won't say (an
+    /// elevated app refuses the query). The file name only — the full path can carry a user name.
+    static func foregroundExecutable() -> String {
+        guard let foreground = GetForegroundWindow() else { return "?" }
+        var processID: DWORD = 0
+        GetWindowThreadProcessId(foreground, &processID)
+        guard processID != 0,
+              let process = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, processID)
+        else { return "?" }
+        defer { CloseHandle(process) }
+
+        var buffer = [WCHAR](repeating: 0, count: 1024)
+        var size = DWORD(buffer.count)
+        let ok = buffer.withUnsafeMutableBufferPointer {
+            QueryFullProcessImageNameW(process, 0, $0.baseAddress, &size)
+        }
+        guard ok else { return "?" }
+        let path = stringFromWide(buffer)
+        return path.split(separator: "\\").last.map(String.init) ?? "?"
     }
 }

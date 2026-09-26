@@ -280,6 +280,56 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertNil(strict.bestConversion(of: "hello akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id))
     }
 
+    // MARK: - Decision reasons (what the diagnostic log records for a declined fix)
+
+    func testDecideAcceptedCarriesScores() {
+        let d = detector.decide(of: "hello akuo", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertEqual(d.reason, .accepted)
+        XCTAssertEqual(d.candidate?.converted.hasSuffix("שלום"), true)
+        XCTAssertEqual(d.tokenCount, 2)
+        XCTAssertEqual(d.originalScore, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(d.bestScore, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(d.threshold, 0.5, accuracy: 0.0001)
+    }
+
+    /// The declined-then-forced case behind "I had to press ⇧⇧ twice": the report has to show
+    /// the scores that made the first attempt decline.
+    func testDecideBelowThresholdReportsBestScore() {
+        let d = detector.decide(of: "hello akuo xqzj wwww", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNil(d.candidate)
+        XCTAssertEqual(d.reason, .belowThreshold)
+        XCTAssertEqual(d.tokenCount, 4)
+        XCTAssertEqual(d.originalScore, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(d.bestScore, 0.25, accuracy: 0.0001)
+    }
+
+    func testDecideAlreadyValid() {
+        let d = detector.decide(of: "hello world", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertNil(d.candidate)
+        XCTAssertEqual(d.reason, .alreadyValid)
+        XCTAssertEqual(d.originalScore, 1.0, accuracy: 0.0001)
+    }
+
+    func testDecideScorelessAndNoTokens() {
+        let scoreless = detector.decide(of: "xqzj", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertEqual(scoreless.reason, .scoreless)
+        XCTAssertNotNil(scoreless.candidate)
+
+        let empty = detector.decide(of: "12 !", layouts: layouts, currentLayoutID: us.id)
+        XCTAssertEqual(empty.reason, .noTokens)
+        XCTAssertEqual(empty.tokenCount, 0)
+        XCTAssertNil(empty.candidate)
+    }
+
+    /// `bestConversion` is `decide(...).candidate` — the two must never disagree.
+    func testDecideMatchesBestConversion() {
+        for text in ["akuo", "hello", "hello akuo", "hello akuo xqzj wwww", "xqzj", "ywei", ""] {
+            let d = detector.decide(of: text, layouts: layouts, currentLayoutID: us.id)
+            let b = detector.bestConversion(of: text, layouts: layouts, currentLayoutID: us.id)
+            XCTAssertEqual(d.candidate?.converted, b?.converted, "disagree on \(text)")
+        }
+    }
+
     // MARK: - Forced conversion (repeat-trigger escalation)
 
     /// A half-typed word no dictionary carries. Since WND-22 the normal path already handles
@@ -345,4 +395,97 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertEqual(LayoutDetector.wordTokens("  hi-there  "), ["hi", "there"])
         XCTAssertEqual(LayoutDetector.wordTokens(""), [])
     }
+}
+
+// MARK: - Problem reports (shared by both apps)
+
+final class ProblemReportFormatTests: XCTestCase {
+    private let when = ReportTimestamp(year: 2026, month: 9, day: 6, hour: 7, minute: 5, second: 9)
+
+    func testBaseNameIsZeroPaddedAndColonFree() {
+        XCTAssertEqual(ReportText.baseName(when), "Wend Problem Report 2026-09-06 at 07.05.09")
+        XCTAssertFalse(ReportText.baseName(when).contains(":"))
+    }
+
+    func testOnlyBugAndIdeaNeedADescription() {
+        XCTAssertEqual(ReportKind.allCases.filter(\.needsDescription), [.bug, .idea])
+        XCTAssertEqual(Set(ReportKind.allCases.map(\.title)).count, ReportKind.allCases.count)
+    }
+
+    func testSummaryCarriesTypeDetailsFactsAndPlatformWording() {
+        let platform = ReportPlatform(copyShortcut: "Ctrl+C", logPath: "%LOCALAPPDATA%\\Wend\\Wend.log",
+                                      crashDescription: "WER entries")
+        let text = ReportText.summary(kind: .idea, created: "then", details: "  add a hotkey \n",
+                                      facts: "-- Wend --\nVersion: 9", platform: platform)
+        XCTAssertTrue(text.contains("Type:     Idea"))
+        XCTAssertTrue(text.contains("Described by the user:\nadd a hotkey\n"))
+        XCTAssertTrue(text.contains("Version: 9"))
+        XCTAssertTrue(text.contains("answered Ctrl+C"))
+        XCTAssertTrue(text.contains("%LOCALAPPDATA%\\Wend\\Wend.log"))
+
+        let empty = ReportText.summary(kind: .pressedTwice, created: "then", details: " \n",
+                                       facts: "", platform: platform)
+        XCTAssertTrue(empty.contains("(nothing written)"))
+    }
+}
+
+final class ZipWriterTests: XCTestCase {
+    private let when = ReportTimestamp(year: 2026, month: 9, day: 26, hour: 17, minute: 45, second: 12)
+
+    func testCRC32KnownAnswers() {
+        XCTAssertEqual(ZipWriter.crc32(Array("123456789".utf8)), 0xCBF4_3926)
+        XCTAssertEqual(ZipWriter.crc32([]), 0)
+    }
+
+    func testArchiveFraming() {
+        var zip = ZipWriter(modified: when)
+        zip.add("a/one.txt", text: "one")
+        zip.add("a/two.txt", text: "two")
+        let bytes = zip.archive()
+        XCTAssertEqual(Array(bytes.prefix(4)), [0x50, 0x4B, 0x03, 0x04])
+        // End-of-central-directory record: 22 bytes, entry count at +10.
+        let end = Array(bytes.suffix(22))
+        XCTAssertEqual(Array(end.prefix(4)), [0x50, 0x4B, 0x05, 0x06])
+        XCTAssertEqual(Int(end[10]) | Int(end[11]) << 8, 2)
+    }
+
+    #if os(macOS)
+    /// The real test: an archive `unzip -t` verifies and `ditto` (Finder's extractor) unpacks
+    /// byte for byte, including a non-ASCII name and an empty file. Extraction is not left to
+    /// `unzip`: Apple's build has no Unicode support and fails on the Hebrew name whatever the
+    /// archive says.
+    func testSystemUnzipRoundTrip() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let files: [(String, [UInt8])] = [
+            ("Report 1/report.txt", Array("hello\nworld\n".utf8)),
+            ("Report 1/שלום.log", Array("⇧⇧ 200 ms".utf8)),
+            ("Report 1/crash/empty.txt", []),
+            ("Report 1/big.bin", (0..<70_000).map { UInt8($0 % 251) }),
+        ]
+        var zip = ZipWriter(modified: when)
+        for (path, data) in files { zip.add(path, data) }
+        let archive = dir.appendingPathComponent("r.zip")
+        try Data(zip.archive()).write(to: archive)
+
+        func run(_ tool: String, _ args: [String]) throws -> Int32 {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: tool)
+            p.arguments = args
+            p.standardInput = FileHandle.nullDevice   // never wait on a prompt
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+            try p.run(); p.waitUntilExit()
+            return p.terminationStatus
+        }
+        XCTAssertEqual(try run("/usr/bin/unzip", ["-tq", archive.path]), 0)
+        XCTAssertEqual(try run("/usr/bin/ditto", ["-x", "-k", archive.path, dir.appendingPathComponent("out").path]), 0)
+        for (path, data) in files {
+            let extracted = try Data(contentsOf: dir.appendingPathComponent("out").appendingPathComponent(path))
+            XCTAssertEqual(Array(extracted), data, path)
+        }
+    }
+    #endif
 }

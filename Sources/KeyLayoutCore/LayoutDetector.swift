@@ -10,6 +10,36 @@ public struct ConversionCandidate: Sendable {
     public let score: Double
 }
 
+/// What `bestConversion` decided and why — so a declined fix can be explained in the
+/// diagnostic log with scores and counts alone, never the text itself.
+public struct ConversionDecision: Sendable {
+    public enum Reason: String, Sendable {
+        /// The best conversion cleared every bar.
+        case accepted
+        /// Nothing reads as a word in any installed language, so the forced rule decided.
+        case scoreless
+        /// No letters to judge (empty, whitespace, digits, punctuation).
+        case noTokens
+        /// No target layout with a language to convert to.
+        case noCandidate
+        /// The best conversion made too few real words.
+        case belowThreshold
+        /// The original already reads perfectly.
+        case alreadyValid
+        /// Converting would read worse than leaving the text alone.
+        case worseThanOriginal
+    }
+
+    public let candidate: ConversionCandidate?
+    public let reason: Reason
+    public let tokenCount: Int
+    /// Best valid-word ratio of the text as it stands, in any installed language.
+    public let originalScore: Double
+    /// Score of the best conversion found, whether or not it was accepted.
+    public let bestScore: Double
+    public let threshold: Double
+}
+
 public struct LayoutDetector {
     public let validator: WordValidator
     /// Minimum valid-word ratio for a conversion to be offered at all.
@@ -32,8 +62,23 @@ public struct LayoutDetector {
         layouts: [LayoutTable],
         currentLayoutID: String? = nil
     ) -> ConversionCandidate? {
+        decide(of: text, layouts: layouts, currentLayoutID: currentLayoutID).candidate
+    }
+
+    /// `bestConversion` with its reasoning attached: the candidate (nil when declined), why,
+    /// and the scores the decision rested on.
+    public func decide(
+        of text: String,
+        layouts: [LayoutTable],
+        currentLayoutID: String? = nil
+    ) -> ConversionDecision {
         let tokens = Self.wordTokens(text)
-        guard !tokens.isEmpty else { return nil }
+        func decision(_ candidate: ConversionCandidate?, _ reason: ConversionDecision.Reason,
+                      original: Double = 0, best: Double = 0) -> ConversionDecision {
+            ConversionDecision(candidate: candidate, reason: reason, tokenCount: tokens.count,
+                               originalScore: original, bestScore: best, threshold: threshold)
+        }
+        guard !tokens.isEmpty else { return decision(nil, .noTokens) }
 
         // How well does the text already read as some real language?
         var originalScore = 0.0
@@ -69,7 +114,8 @@ public struct LayoutDetector {
         // A conversion that turns out to be unwanted is undone by fixing again, since the
         // result is equally scoreless and maps straight back.
         if originalScore == 0 {
-            return forcedConversion(of: text, layouts: layouts, currentLayoutID: currentLayoutID)
+            let forced = forcedConversion(of: text, layouts: layouts, currentLayoutID: currentLayoutID)
+            return decision(forced, .scoreless, best: forced?.score ?? best?.score ?? 0)
         }
 
         // Invoking the fix is an explicit "this text is wrong" from the user, so a conversion
@@ -77,12 +123,18 @@ public struct LayoutDetector {
         // to lose the common two-token case where exactly one token is valid on each side
         // ("re ehcbv" -> "רק קיבנה": 0.5 vs 0.5), which failed silently. Text that already
         // reads perfectly is still left untouched, and a conversion is never a step backwards.
-        guard let candidate = best,
-              candidate.score >= threshold,
-              originalScore < 1.0,
-              candidate.score >= originalScore
-        else { return nil }
-        return candidate
+        guard let candidate = best else { return decision(nil, .noCandidate, original: originalScore) }
+        let score = candidate.score
+        guard score >= threshold else {
+            return decision(nil, .belowThreshold, original: originalScore, best: score)
+        }
+        guard originalScore < 1.0 else {
+            return decision(nil, .alreadyValid, original: originalScore, best: score)
+        }
+        guard score >= originalScore else {
+            return decision(nil, .worseThanOriginal, original: originalScore, best: score)
+        }
+        return decision(candidate, .accepted, original: originalScore, best: score)
     }
 
     /// Best conversion ignoring the dictionary entirely — for when the user insists the text

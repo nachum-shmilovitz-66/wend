@@ -4,8 +4,16 @@
 //
 // The hook sees every keystroke on the desktop, so it deliberately keeps none of them. The
 // only state it carries is a flag saying whether some non-Shift key went down during the
-// current Shift press, plus two timestamps. No key code is ever stored, logged, or copied
+// current Shift press, plus a few timestamps. No key code is ever stored, logged, or copied
 // anywhere — the constraint WND-8 set for the macOS event monitor applies here just as much.
+//
+// Why a ⇧⇧ didn't fire is otherwise invisible, so every *bare* Shift press is logged with its
+// hold and its gap to the previous tap, in the same words the macOS build uses. Shift pressed
+// with another key (typing a capital, a shortcut) is logged only when it spoils a pending
+// second tap — it's the common case, and logging it would chart the user's typing. Timings,
+// which Shift (L/R), and verdicts only; no other key is ever named. Log.write only appends to
+// memory on this thread — the file write, when logging is on, is queued — so the hook still
+// returns promptly.
 
 import WinSDK
 
@@ -19,6 +27,10 @@ final class HotkeyManager {
     var triggerCookie: WPARAM = 0
 
     private var hook: HHOOK?
+
+    /// The windows taps are judged by, for a problem report.
+    var doubleTapInterval: DWORD { ShiftTapDetector.shared.doubleTapInterval }
+    var maximumHold: DWORD { ShiftTapDetector.shared.maximumHold }
 
     func start() {
         ShiftTapDetector.shared.targetWindow = targetWindow
@@ -58,13 +70,18 @@ private final class ShiftTapDetector {
     var triggerMessage: UINT = 0
     var triggerCookie: WPARAM = 0
 
-    private let doubleTapInterval: DWORD = 400
-    private let maximumHold: DWORD = 300
+    // Internal, not private: a problem report records the windows the taps were judged by.
+    let doubleTapInterval: DWORD = 400
+    let maximumHold: DWORD = 300
+    /// Auto-repeat re-sends a held Shift's key-down every few tens of ms. A key-down while we
+    /// think Shift is down, after a silence this long, is a fresh press whose release was missed.
+    private let staleGap: DWORD = 1000
 
     private var shiftIsDown = false
     private var shiftDownTime: DWORD = 0
     private var otherKeyDuringShift = false
     private var lastTapTime: DWORD = 0
+    private var lastShiftEventTime: DWORD = 0
 
     func handle(message: WPARAM, event: KBDLLHOOKSTRUCT) {
         // Wend's own synthesized Ctrl+C / Ctrl+V come back through this hook. Counting them as
@@ -82,32 +99,74 @@ private final class ShiftTapDetector {
 
         if isDown {
             guard isShift else {
+                if shiftIsDown, !otherKeyDuringShift, secondTapPending(time) {
+                    Log.write("⇧ second tap spoiled: a key was pressed while ⇧ was down")
+                }
                 otherKeyDuringShift = true
                 return
             }
             // Auto-repeat re-sends key-down while Shift is held; only the first one starts the
             // clock, or holding Shift would look like a very short press.
-            guard !shiftIsDown else { return }
+            guard !shiftIsDown else {
+                // A key-down after a long silence is not a repeat: it's a new press, and the
+                // last release never reached us. The stale press makes this one read as a long
+                // hold, costing the first tap of the next ⇧⇧.
+                if elapsed(from: lastShiftEventTime, to: time) > staleGap {
+                    Log.write("⇧ \(side(key)) down while ⇧ already down for \(elapsed(from: shiftDownTime, to: time)) ms")
+                }
+                lastShiftEventTime = time
+                return
+            }
             shiftIsDown = true
             shiftDownTime = time
+            lastShiftEventTime = time
             otherKeyDuringShift = anotherModifierHeld()
+            if otherKeyDuringShift, secondTapPending(time) {
+                Log.write("⇧ second tap spoiled: another modifier was already held")
+            }
             return
         }
 
         guard isShift, shiftIsDown else { return }
         shiftIsDown = false
+        lastShiftEventTime = time
+        let held = elapsed(from: shiftDownTime, to: time)
 
-        guard !otherKeyDuringShift, elapsed(from: shiftDownTime, to: time) <= maximumHold else {
+        guard !otherKeyDuringShift, held <= maximumHold else {
+            if !otherKeyDuringShift {
+                // Bare Shift, held too long. Seconds or more means the press itself was stale —
+                // see the "already down" line above.
+                Log.write("⇧ \(side(key)) press held=\(held) ms > \(maximumHold): not a tap")
+            }
             lastTapTime = 0
             return
         }
-        if lastTapTime != 0, elapsed(from: lastTapTime, to: time) <= doubleTapInterval {
+        let gap = elapsed(from: lastTapTime, to: time)
+        if lastTapTime != 0, gap <= doubleTapInterval {
+            Log.write("⇧ \(side(key)) tap held=\(held) gap=\(gap) ms: double-tap, trigger")
             lastTapTime = 0
             if let window = targetWindow, triggerMessage != 0 {
                 PostMessageW(window, triggerMessage, triggerCookie, 0)
             }
         } else {
+            Log.write(lastTapTime != 0
+                ? "⇧ \(side(key)) tap held=\(held) gap=\(gap) ms > \(doubleTapInterval): first tap (again)"
+                : "⇧ \(side(key)) tap held=\(held) ms: first tap")
             lastTapTime = time
+        }
+    }
+
+    /// A first tap is waiting for its partner — the only time a spoiled press is worth a line.
+    private func secondTapPending(_ time: DWORD) -> Bool {
+        lastTapTime != 0 && elapsed(from: lastTapTime, to: time) <= doubleTapInterval
+    }
+
+    /// Which Shift, for the log. A low-level hook reports the side-specific codes.
+    private func side(_ key: Int32) -> String {
+        switch key {
+        case VK_LSHIFT: return "L"
+        case VK_RSHIFT: return "R"
+        default:        return "?"
         }
     }
 

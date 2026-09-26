@@ -41,7 +41,7 @@ private enum Command: UINT {
     case switchAfterFix
     case launchAtLogin
     case logging
-    case feedback
+    case report
     case about
     case quit
 }
@@ -56,6 +56,8 @@ final class App {
     private var window: HWND?
     private var controller: FixController?
     private let hotkeys = HotkeyManager()
+    private let reportWindow = ReportWindow()
+    private let launchedAt = Date()
     private var trayIcon: NOTIFYICONDATAW?
     private var instanceMutex: HANDLE?
     /// How long a WM_COMMAND is accepted for — see showMenu. Nil until the first menu opens.
@@ -77,6 +79,14 @@ final class App {
 
         Log.write("launch version=\(Version.short)")
         controller.prepare()
+
+        ReportWindow.shared = reportWindow
+        reportWindow.recipient = "nachumsh2@gmail.com"
+        reportWindow.diagnostics = { [weak self] in self?.diagnostics() ?? "" }
+        reportWindow.saveReport = { [weak self] kind, details in
+            guard let self else { throw ReportFailure("Wend is shutting down") }
+            return try self.saveProblemReport(kind: kind, details: details)
+        }
 
         hotkeys.targetWindow = window
         hotkeys.triggerMessage = messageFix
@@ -133,6 +143,11 @@ final class App {
         // that case. It needs an invalid window handle or message filter to happen, and this
         // call passes neither, so there is nothing lost here.
         while GetMessageW(&message, nil, 0, 0) {
+            // The report form is an ordinary window of plain controls; IsDialogMessage gives it
+            // Tab, arrow keys in the radio group, Enter for Save Report and Esc for Cancel.
+            if let form = reportWindow.window, IsWindowVisible(form), IsDialogMessageW(form, &message) {
+                continue
+            }
             TranslateMessage(&message)
             DispatchMessageW(&message)
         }
@@ -214,8 +229,8 @@ final class App {
         case .logging:
             Log.isEnabled.toggle()
 
-        case .feedback:
-            openFeedback()
+        case .report:
+            reportWindow.show()
 
         case .about:
             showAbout()
@@ -228,10 +243,12 @@ final class App {
     /// Let the menu dismiss and the previous app regain focus before we synthesize Ctrl+C —
     /// otherwise the copy targets nothing and the fix no-ops.
     private func performFixSoon() {
+        Log.write("menu fix")
         SetTimer(window, fixDelayTimer, 200, nil)
     }
 
     private func quit() {
+        Log.flush()   // disk writes are queued; don't lose the last lines on the way out
         hotkeys.stop()
         removeTrayIcon()
         if let window { DestroyWindow(window) }
@@ -303,7 +320,7 @@ final class App {
                checked: controller.switchInputSourceAfterFix)
         append(menu, .launchAtLogin, "Launch at Login", checked: LaunchAtLogin.isEnabled)
         append(menu, .logging, "Enable Diagnostic Logging", checked: Log.isEnabled)
-        append(menu, .feedback, "Send Feedback…")
+        append(menu, .report, "Report a Problem…")
         appendSeparator(menu)
         // Version rides on the About row rather than a row of its own: it identifies the
         // running build at a glance for a bug report, without spending a menu line on it.
@@ -341,7 +358,7 @@ final class App {
         AppendMenuW(menu, UINT(MF_SEPARATOR), 0, nil)
     }
 
-    // MARK: - About / feedback
+    // MARK: - About
 
     private func showAbout() {
         let text = """
@@ -359,34 +376,79 @@ final class App {
         }
     }
 
-    /// Opens Gmail's web compose prefilled with diagnostics, the same zero-backend route the
-    /// macOS build takes. The log is deliberately not attached: the macOS build only inlines it
-    /// behind an explicit checkbox, and there is no form here to hold one — so it stays local
-    /// and the user can paste it themselves if they want to.
-    private func openFeedback() {
-        let body = """
-            (describe the problem here)
+    // MARK: - Problem reports
 
-            ----- diagnostics -----
-            \(diagnostics())
-            """
-        var components = URLComponents(string: "https://mail.google.com/mail/")
-        components?.queryItems = [
-            URLQueryItem(name: "view", value: "cm"),
-            URLQueryItem(name: "fs", value: "1"),
-            URLQueryItem(name: "to", value: "nachumsh2@gmail.com"),
-            URLQueryItem(name: "su", value: "[Wend] "),
-            URLQueryItem(name: "body", value: body),
-        ]
-        guard let url = components?.url else { return }
-        _ = withWide(url.absoluteString) { address in
-            withWide("open") { verb in
-                ShellExecuteW(nil, verb, address, nil, nil, Int32(SW_SHOWNORMAL))
-            }
+    private func saveProblemReport(kind: ReportKind, details: String) throws -> String {
+        Log.write("report requested: \(kind.tag)")   // lands in the trail it's about to save
+        guard let folder = ProblemReport.downloadsFolder() else {
+            throw ReportFailure("Couldn't find your Downloads folder.")
         }
+        let report = ProblemReport(kind: kind, details: details, facts: reportFacts())
+        let path = try report.save(inFolder: folder)
+        Log.write("report saved")
+        return path
     }
 
-    /// Auto-collected diagnostics for a feedback report, so reports are actionable.
+    /// Everything a report reader needs to know about this Wend and this PC, as it stands when
+    /// the report is saved. Settings, ids and counts — nothing the user typed.
+    private func reportFacts() -> String {
+        let uptime = Int(Date().timeIntervalSince(launchedAt))
+        let provider = InputSourceProvider()
+        let current = provider.currentLayoutID()
+        let layoutLines = provider.installedLayouts().map { l in
+            "\(l.id == current ? "*" : " ") \(l.id)  \"\(l.localizedName)\"  lang=\(l.languageCode ?? "none")"
+        }
+        let dictionaries = SpellWordValidator.installedDictionaries().sorted().joined(separator: ", ")
+        let onOff: (Bool) -> String = { $0 ? "on" : "off" }
+        #if arch(arm64)
+        let architecture = "arm64"
+        #else
+        let architecture = "x86_64"
+        #endif
+
+        return """
+            -- Wend --
+            Version:            \(Version.short)
+            Executable:         \(Self.withoutUserName(LaunchAtLogin.command))
+            Running for:        \(uptime / 3600)h \(uptime / 60 % 60)m \(uptime % 60)s (pid \(GetCurrentProcessId()))
+            Switch after fix:   \(onOff(controller?.switchInputSourceAfterFix ?? false))
+            Launch at Login:    \(onOff(LaunchAtLogin.isEnabled))
+            Disk log (opt-in):  \(onOff(Log.isEnabled))
+
+            -- Windows --
+            Windows:            \(windowsVersion()) (\(architecture))
+            Locale:             \(Locale.current.identifier), time zone \(TimeZone.current.identifier)
+
+            -- Trigger windows --
+            Double-tap:         \(hotkeys.doubleTapInterval) ms, release to release
+            Max tap hold:       \(hotkeys.maximumHold) ms
+            Force window:       \(Int((controller?.forceWindow ?? 0) * 1000)) ms after a declined fix
+
+            -- Keyboard layouts (* = current) --
+            \(layoutLines.joined(separator: "\n"))
+
+            -- Spell-check dictionaries --
+            \(dictionaries.isEmpty ? "(none)" : dictionaries)
+            """
+    }
+
+    /// A path with the profile folders written as their variables, so a per-user install's
+    /// path doesn't carry the Windows user name into a report that may be emailed.
+    private static func withoutUserName(_ path: String) -> String {
+        let env = ProcessInfo.processInfo.environment
+        for variable in ["LOCALAPPDATA", "APPDATA", "USERPROFILE"] {
+            guard let prefix = env[variable], !prefix.isEmpty,
+                  path.lowercased().hasPrefix(prefix.lowercased()) ||
+                  path.lowercased().hasPrefix("\"" + prefix.lowercased())
+            else { continue }
+            let quoted = path.hasPrefix("\"")
+            let rest = path.dropFirst(prefix.count + (quoted ? 1 : 0))
+            return (quoted ? "\"" : "") + "%\(variable)%" + rest
+        }
+        return path
+    }
+
+    /// Short diagnostics for a report email, so reports are actionable.
     private func diagnostics() -> String {
         let layouts = InputSourceProvider().installedLayouts()
             .map(\.localizedName)
@@ -414,4 +476,11 @@ private let windowProcedure: WNDPROC = { window, message, wParam, lParam in
         return handled
     }
     return DefWindowProcW(window, message, wParam, lParam)
+}
+
+/// A report that couldn't be saved, with the reason the user is shown. LocalizedError, so the
+/// form's `localizedDescription` reads this reason rather than a generic "error 1".
+private struct ReportFailure: LocalizedError {
+    let errorDescription: String?
+    init(_ reason: String) { errorDescription = reason }
 }

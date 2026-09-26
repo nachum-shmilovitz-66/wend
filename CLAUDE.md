@@ -118,3 +118,9 @@ size-capped.
 It records **metadata only — never any substring of the user's text**. Keep it that way:
 lengths, counts, scores, and fixed strings are fine; anything derived from the content is
 not.
+
+Every log line also goes to an **in-memory trail** (last 2000 lines) that is always on,
+whatever the opt-in says. It is never written to disk except inside a "Report a Problem…"
+zip the user saves to Downloads, and it is gone when Wend quits. Same metadata-only rule. The
+report's kinds, file name, wording and zip format live in `KeyLayoutCore`
+(`ProblemReportFormat.swift`, `ZipWriter.swift`) so both platforms' reports read the same.

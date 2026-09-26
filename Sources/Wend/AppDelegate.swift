@@ -1,6 +1,7 @@
 // AppDelegate (macOS): menu-bar item + wiring. No Dock icon (accessory activation policy).
 
 import AppKit
+import Carbon.HIToolbox   // IsSecureEventInputEnabled, for the report
 import ServiceManagement
 import KeyLayoutCore
 
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var loginItem: NSMenuItem!
     private var loggingItem: NSMenuItem!
     private var axStatusItem: NSMenuItem!
+    private let launchedAt = Date()
 
     /// Shown on reopen (relaunch while already running) and from the menu. Closures keep the
     /// permission / login-item logic here in AppDelegate as the single source of truth.
@@ -29,15 +31,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         wc.onOpenAccessibility = { [weak self] in self?.permissions.openAccessibilitySettings() }
         wc.onAbout = { [weak self] in self?.showAbout() }
         wc.onQuit = { [weak self] in self?.quit() }
-        wc.onFeedback = { [weak self] in self?.openFeedback() }
+        wc.onFeedback = { [weak self] in self?.openReport() }
         return wc
     }()
 
-    private lazy var feedbackWindow: FeedbackWindowController = {
-        let wc = FeedbackWindowController()
+    private lazy var reportWindow: ReportWindowController = {
+        let wc = ReportWindowController()
         wc.recipient = "nachumsh2@gmail.com"
         wc.diagnostics = { [weak self] in self?.feedbackContext() ?? "" }
-        wc.logTail = { [weak self] in self?.wendLogTail() }
+        wc.saveReport = { [weak self] kind, details in
+            guard let self else { throw CocoaError(.featureUnsupported) }
+            return try self.saveProblemReport(kind: kind, details: details)
+        }
         return wc
     }()
 
@@ -48,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         enableLaunchAtLoginOnFirstRun()   // before the menu, so its checkmark is correct
 
         buildStatusItem()
+        installEditMenu()
 
         Log.write("launch axTrusted=\(permissions.isTrusted())")
         hotkeys.onTrigger = { [weak self] in
@@ -71,6 +77,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Menu
+
+    /// An accessory app shows no menu bar, and without an Edit menu ⌘C / ⌘V / ⌘A / ⌘Z never
+    /// reach a text field: the report form's description box couldn't be pasted into. This menu
+    /// is never displayed; it exists for its key equivalents, which AppKit still routes while
+    /// one of Wend's windows is key.
+    private func installEditMenu() {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        editItem.submenu = edit
+        let main = NSMenu()
+        main.addItem(NSMenuItem())   // the application menu's slot, left empty
+        main.addItem(editItem)
+        NSApp.mainMenu = main
+    }
 
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -129,8 +157,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         axItem.target = self
 
-        let feedbackItem = menu.addItem(withTitle: "Send Feedback…", action: #selector(openFeedback), keyEquivalent: "")
-        feedbackItem.target = self
+        let reportItem = menu.addItem(withTitle: "Report a Problem…", action: #selector(openReport), keyEquivalent: "")
+        reportItem.target = self
 
         menu.addItem(.separator())
 
@@ -193,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Let the menu/window fully dismiss and the previous app regain focus before we
     /// synthesize ⌘C — otherwise the copy targets nothing and the fix no-ops.
     private func performFixSoon() {
+        Log.write("menu fix")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.controller.performFix()
         }
@@ -250,10 +279,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         permissions.openAccessibilitySettings()
     }
 
-    // MARK: - Feedback
+    // MARK: - Problem reports
 
-    @objc private func openFeedback() {
-        feedbackWindow.show()
+    @objc private func openReport() {
+        reportWindow.show()
+    }
+
+    private func saveProblemReport(kind: ReportKind, details: String) throws -> URL {
+        Log.write("report requested: \(kind.tag)")   // lands in the trail it's about to save
+        let report = ProblemReport(kind: kind, details: details, facts: reportFacts())
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads")
+        let url = try report.save(in: downloads)
+        Log.write("report saved")
+        return url
+    }
+
+    /// Everything a report reader needs to know about this Wend and this Mac, as it stands
+    /// when the report is saved. Settings, ids and counts — nothing the user typed.
+    private func reportFacts() -> String {
+        let info = ProcessInfo.processInfo
+        let uptime = Int(Date().timeIntervalSince(launchedAt))
+        let layouts = InputSourceProvider().installedLayouts()
+        let current = InputSourceProvider().currentLayoutID()
+        let layoutLines = layouts.map { l in
+            "\(l.id == current ? "*" : " ") \(l.id)  \"\(l.localizedName)\"  lang=\(l.languageCode ?? "none")"
+        }
+        let spell = NSSpellChecker.shared.availableLanguages.sorted().joined(separator: ", ")
+        let onOff: (Bool) -> String = { $0 ? "on" : "off" }
+
+        return """
+            -- Wend --
+            Version:            \(Self.versionDisplay)
+            Bundle:             \((Bundle.main.bundlePath as NSString).abbreviatingWithTildeInPath)
+            Running for:        \(uptime / 3600)h \(uptime / 60 % 60)m \(uptime % 60)s (pid \(info.processIdentifier))
+            Accessibility:      \(permissions.isTrusted() ? "granted" : "NOT granted")
+            Secure input now:   \(onOff(IsSecureEventInputEnabled()))
+            Switch after fix:   \(onOff(controller.switchInputSourceAfterFix))
+            Launch at Login:    \(onOff(launchAtLoginEnabled))
+            Disk log (opt-in):  \(onOff(Log.isEnabled))
+
+            -- Mac --
+            macOS:              \(info.operatingSystemVersionString)
+            Model:              \(Self.hardwareModel) (\(Self.architecture))
+            Locale:             \(Locale.current.identifier), time zone \(TimeZone.current.identifier)
+
+            -- Trigger windows --
+            Double-tap:         \(Int(hotkeys.doubleTapInterval * 1000)) ms, release to release
+            Max tap hold:       \(Int(hotkeys.maxHold * 1000)) ms
+            Force window:       \(Int(controller.forceWindow * 1000)) ms after a declined fix
+
+            -- Keyboard layouts (* = current) --
+            \(layoutLines.joined(separator: "\n"))
+
+            -- Spell-check languages --
+            \(spell.isEmpty ? "(none)" : spell)
+            """
+    }
+
+    private static var hardwareModel: String {
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var buffer = [CChar](repeating: 0, count: max(size, 1))
+        sysctlbyname("hw.model", &buffer, &size, nil, 0)
+        return String(cString: buffer)
+    }
+
+    private static var architecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #else
+        return "x86_64"
+        #endif
     }
 
     // MARK: - Version
@@ -280,18 +377,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .map { $0.localizedName }.joined(separator: ", ")
         let ax = permissions.isTrusted() ? "granted" : "not granted"
         return "Wend \(version)\nmacOS: \(os)\nLayouts: \(layouts)\nAccessibility: \(ax)"
-    }
-
-    private func wendLogURL() -> URL? {
-        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Logs/Wend.log")
-    }
-
-    /// Recent tail of the log, inlined into feedback (a compose URL can't attach a file).
-    private func wendLogTail(maxChars: Int = 4000) -> String? {
-        guard let url = wendLogURL(),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return text.count <= maxChars ? text : "…(truncated)\n" + String(text.suffix(maxChars))
     }
 
     @objc private func showAbout() {

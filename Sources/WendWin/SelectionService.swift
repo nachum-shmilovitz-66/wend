@@ -89,11 +89,19 @@ final class SelectionService {
         sendControlShortcut(virtualKey: UInt16(0x43))   // 'C'
 
         // Pump the message loop until the clipboard updates or we time out.
-        let deadline = Date().addingTimeInterval(0.6)
+        let started = Date()
+        let deadline = started.addingTimeInterval(0.6)
         while GetClipboardSequenceNumber() == before && Date() < deadline {
             pumpMessages(for: 0.01)
         }
-        guard GetClipboardSequenceNumber() != before else { return .noSelection }
+        // How long the app took to answer Ctrl+C: a copy that lands just under the timeout on
+        // one attempt can miss it on the next, which reads to the user as "had to press twice".
+        let waited = Int(Date().timeIntervalSince(started) * 1000)
+        guard GetClipboardSequenceNumber() != before else {
+            Log.write("copy: no clipboard change within \(waited) ms")
+            return .noSelection
+        }
+        Log.write("copy: clipboard changed after \(waited) ms")
         guard let plain = clipboardUnicodeText() else { return .noTextFlavor }
 
         // Some web editors (Google Chat's compose box) flatten line breaks to spaces in the

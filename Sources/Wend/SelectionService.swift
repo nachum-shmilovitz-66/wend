@@ -73,11 +73,19 @@ final class SelectionService {
         postKeyWithCommand(CGKeyCode(kVK_ANSI_C))
 
         // Pump the run loop until the pasteboard updates or we time out.
-        let deadline = Date().addingTimeInterval(0.6)
+        let started = Date()
+        let deadline = started.addingTimeInterval(0.6)
         while pasteboard.changeCount == startCount && Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
         }
-        guard pasteboard.changeCount != startCount else { return .noSelection }
+        // How long the app took to answer ⌘C: a copy that lands just under the timeout on one
+        // attempt can miss it on the next, which reads to the user as "had to press twice".
+        let waited = Int(Date().timeIntervalSince(started) * 1000)
+        guard pasteboard.changeCount != startCount else {
+            Log.write("copy: no clipboard change within \(waited) ms")
+            return .noSelection
+        }
+        Log.write("copy: clipboard changed after \(waited) ms")
         guard let plain = pasteboard.string(forType: .string) else { return .noTextFlavor }
 
         // Some web editors (Google Chat's compose box) flatten line breaks to spaces in the
