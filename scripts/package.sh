@@ -17,8 +17,8 @@ set -euo pipefail
 
 APP_NAME="Wend"
 BUNDLE_ID="${BUNDLE_ID:-com.nachumsh.wend}"
-SHORT_VERSION="${SHORT_VERSION:-1.2.4}"
-BUILD_VERSION="${BUILD_VERSION:-11}"
+SHORT_VERSION="${SHORT_VERSION:-1.2.5}"
+BUILD_VERSION="${BUILD_VERSION:-12}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"

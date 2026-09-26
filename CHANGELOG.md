@@ -2,6 +2,16 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.5] — 2026-09-26
+
+- **Report a Problem, from the menu.** When something goes wrong, choose *Report a Problem…*, say what happened — *I had to press ⇧⇧ twice*, *The text didn't convert at all*, *Another bug*, or *An idea or a suggestion* — describe it, and click *Save Report*. Wend saves a zip to your Downloads folder, named with the date and time to the second, and shows it in Finder. *Save & Email…* does the same and opens a prefilled email to send it with. This replaces *Send Feedback*, which could only inline part of the log into an email.
+- **Wend now keeps a short trail of recent events, always.** Each Shift tap with its timing, why a fix converted or declined and on what scores, how long the app took to answer ⌘C, and the app in front. It lives in memory only, is written out only into a report you save, and is cleared when Wend quits. Like the diagnostic log, it never holds any of your text. The point is to explain the "I had to press ⇧⇧ twice" cases: whether the first double-tap wasn't recognised at all, or was recognised and declined by the dictionary.
+- **The diagnostic log records more, to the millisecond:** every bare Shift tap and why it did or didn't count, and the reason and scores behind every decision.
+- **Fixed: copy, paste and select-all didn't work in Wend's own text fields.** Wend has no menu bar, so ⌘C / ⌘V / ⌘A / ⌘Z had nothing to route through. They work now.
+- **Fixed: the diagnostic log file could be readable by other users on the Mac** if it predated the owner-only rule. Wend now tightens it on first write.
+
+**Windows:** the same *Report a Problem…* form and always-on trail are in the source for Windows, but the Windows build for 1.2.5 hasn't been made yet. Until its files are added to this release, the Windows download remains 1.2.4.
+
 ## [1.2.4] — 2026-07-30
 
 **Wend now runs on Windows.** Same app, same double-tap Shift, same trick: it reads the keyboard layouts you actually have installed and works out which conversion turns your text into real words. All the conversion and detection logic is the code the Mac has been using — only the parts that talk to the operating system are written twice — so the two behave identically by construction rather than by imitation.
@@ -59,6 +69,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.5]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.5
 [1.2.4]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.4
 [1.2.3]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.3
 [1.2.2]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.2
