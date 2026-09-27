@@ -24,7 +24,7 @@ public struct ConversionDecision: Sendable {
         case noCandidate
         /// The best conversion made too few real words.
         case belowThreshold
-        /// The original already reads perfectly.
+        /// The original already reads perfectly and no conversion reads as well.
         case alreadyValid
         /// Converting would read worse than leaving the text alone.
         case worseThanOriginal
@@ -98,6 +98,10 @@ public struct LayoutDetector {
             for target in layouts where target.id != source.id {
                 guard let lang = target.languageCode else { continue }
                 let converted = LayoutMapper.remap(text, from: source, to: target)
+                // A source layout that carries none of the text's characters hands it back
+                // unchanged. That pair scores exactly what the original does, so it could win a
+                // tie and "fix" the text by pasting back what was selected.
+                guard converted != text else { continue }
                 let score = validRatio(Self.wordTokens(converted), language: lang)
                 if best == nil || score > best!.score {
                     best = ConversionCandidate(source: source, target: target, converted: converted, score: score)
@@ -121,15 +125,20 @@ public struct LayoutDetector {
         // Invoking the fix is an explicit "this text is wrong" from the user, so a conversion
         // that merely ties the original is still offered. Requiring a strict improvement used
         // to lose the common two-token case where exactly one token is valid on each side
-        // ("re ehcbv" -> "רק קיבנה": 0.5 vs 0.5), which failed silently. Text that already
-        // reads perfectly is still left untouched, and a conversion is never a step backwards.
+        // ("re ehcbv" -> "רק קיבנה": 0.5 vs 0.5), which failed silently. The same goes when both
+        // sides read perfectly: a short word can be real in both languages, and declining it
+        // meant pressing ⇧⇧ twice to get what the first press asked for (WND-32). Fixing again
+        // converts it back. Text that reads perfectly is still left alone when no conversion
+        // reads as well, and a conversion is never a step backwards.
         guard let candidate = best else { return decision(nil, .noCandidate, original: originalScore) }
         let score = candidate.score
+        // Checked before the threshold so the log names the real reason: the text already
+        // reads perfectly, whatever the conversions scored.
+        guard originalScore < 1.0 || score >= 1.0 else {
+            return decision(nil, .alreadyValid, original: originalScore, best: score)
+        }
         guard score >= threshold else {
             return decision(nil, .belowThreshold, original: originalScore, best: score)
-        }
-        guard originalScore < 1.0 else {
-            return decision(nil, .alreadyValid, original: originalScore, best: score)
         }
         guard score >= originalScore else {
             return decision(nil, .worseThanOriginal, original: originalScore, best: score)

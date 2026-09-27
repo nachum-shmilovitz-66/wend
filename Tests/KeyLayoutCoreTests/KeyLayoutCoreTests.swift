@@ -310,6 +310,47 @@ final class LayoutDetectorTests: XCTestCase {
         XCTAssertEqual(d.originalScore, 1.0, accuracy: 0.0001)
     }
 
+    /// WND-32, from a real report: four letters typed in Hebrew were a real Hebrew word, and
+    /// their English conversion was a real English word too (1.00 vs 1.00). The first ⇧⇧ was
+    /// declined as alreadyValid and only the forced second one converted. Both sides reading
+    /// perfectly is still a tie, and a tie converts.
+    func testBothSidesValidConvertsOnFirstTry() {
+        // "akuo" and "שלום" are the same keys; here both are words.
+        let both = LayoutDetector(validator: MockValidator(words: [
+            "en": ["akuo"],
+            "he": ["שלום"],
+        ]))
+
+        let d = both.decide(of: "שלום", layouts: [us, he], currentLayoutID: he.id)
+        XCTAssertEqual(d.reason, .accepted)
+        XCTAssertEqual(d.candidate?.converted, "akuo")
+        XCTAssertEqual(d.originalScore, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(d.bestScore, 1.0, accuracy: 0.0001)
+
+        // Fixing again converts it back.
+        let back = both.bestConversion(of: "akuo", layouts: [us, he], currentLayoutID: us.id)
+        XCTAssertEqual(back?.converted, "שלום")
+    }
+
+    /// A source layout that carries none of the text's characters returns it unchanged, and
+    /// that pair scores exactly what the original does. It must never win a tie, or the fix
+    /// pastes back what was selected and appears to do nothing. The active layout goes first
+    /// and wins ties, so pointing it at the layout the text did not come from is the trap.
+    func testUnchangedConversionNeverWins() {
+        let both = LayoutDetector(validator: MockValidator(words: [
+            "en": ["akuo"],
+            "he": ["שלום"],
+        ]))
+        let fullyValid = both.decide(of: "שלום", layouts: [us, he], currentLayoutID: us.id)
+        XCTAssertEqual(fullyValid.candidate?.converted, "akuo")
+
+        // Half valid on each side: US -> HE gives "...שלום", HE -> US gives the text back.
+        let mixed = detector.decide(of: "hello akuo", layouts: layouts, currentLayoutID: he.id)
+        XCTAssertEqual(mixed.reason, .accepted)
+        XCTAssertNotEqual(mixed.candidate?.converted, "hello akuo")
+        XCTAssertEqual(mixed.candidate?.converted.hasSuffix("שלום"), true)
+    }
+
     func testDecideScorelessAndNoTokens() {
         let scoreless = detector.decide(of: "xqzj", layouts: layouts, currentLayoutID: us.id)
         XCTAssertEqual(scoreless.reason, .scoreless)
