@@ -36,8 +36,8 @@ function Assert-Command([string] $name, [string] $why) {
 #
 # scripts/package.sh owns the version for both platforms; it is read out of there rather
 # than duplicated, so a Windows release can't ship a number the macOS one doesn't have.
-# Version.swift has to carry the same string because the running app shows it in its menu
-# and in feedback reports, and nothing but this check enforces that they agree.
+# Version.swift has to carry the same string because the running app shows it in its About
+# box and in problem reports, and nothing but this check enforces that they agree.
 
 $packageScript = Get-Content (Join-Path $root 'scripts\package.sh') -Raw
 if ($packageScript -notmatch 'SHORT_VERSION="\$\{SHORT_VERSION:-([^}]+)\}"') {

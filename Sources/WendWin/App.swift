@@ -322,9 +322,8 @@ final class App {
         append(menu, .logging, "Enable Diagnostic Logging", checked: Log.isEnabled)
         append(menu, .report, "Report a Problem…")
         appendSeparator(menu)
-        // Version rides on the About row rather than a row of its own: it identifies the
-        // running build at a glance for a bug report, without spending a menu line on it.
-        append(menu, .about, "About Wend \(Version.short)")
+        // No version on this row: the About box shows it, and reports carry it too.
+        append(menu, .about, "About Wend")
         appendSeparator(menu)
         append(menu, .quit, "Quit Wend")
 
@@ -361,13 +360,16 @@ final class App {
     // MARK: - About
 
     private func showAbout() {
+        // Laid out like the macOS About panel. The copyright matches NSHumanReadableCopyright
+        // in Packaging/Info.plist and LegalCopyright in scripts/stamp_resources.py.
         let text = """
-            Wend \(Version.short)
+            Wend
+            Version \(Version.short)
 
             Fix text typed in the wrong keyboard layout.
             Select it and double-tap Shift.
 
-            Created by Shmilovitz
+            © 2026 Nachum Shmilovitz
             """
         _ = withWide(text) { body in
             withWide("About Wend") { title in

@@ -162,12 +162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        // Version rides on the About row rather than a row of its own: it identifies the
-        // running build at a glance for a bug report, without spending a menu line on it.
-        // Marketing version only — the build number is noise here, and feedback reports
-        // still carry it via feedbackContext().
+        // No version on this row: the About panel shows it, and reports carry the full one.
         let about = menu.addItem(
-            withTitle: "About Wend \(Self.shortVersion)",
+            withTitle: "About Wend",
             action: #selector(showAbout),
             keyEquivalent: ""
         )
@@ -383,11 +380,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Accessory (LSUIElement) app: bring it forward so the panel isn't hidden.
         NSApp.activate(ignoringOtherApps: true)
         let version = Self.shortVersion
-        let credits = NSAttributedString(
-            string: "Created by Shmilovitz",
-            attributes: [.font: NSFont.systemFont(ofSize: 11),
-                         .foregroundColor: NSColor.secondaryLabelColor]
-        )
+        // No credits: the panel's copyright line (NSHumanReadableCopyright) already names
+        // the author, and a second line saying the same thing is noise.
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "Wend",
             .applicationVersion: version,
@@ -395,7 +389,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // this key is supplied. Blank it to show the marketing version alone; the build
             // number is still carried in feedback reports via feedbackContext().
             .version: "",
-            .credits: credits,
         ])
     }
 
