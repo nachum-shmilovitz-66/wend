@@ -2,6 +2,13 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.8] — 2026-09-27
+
+- **Fixed: Wend could freeze for 2 minutes.** Before a fix, Wend saves your clipboard so it can put it back afterwards. Some apps supply clipboard contents only when something asks for them. If that app didn't answer, Wend waited the system's full 2 minutes: double-tapping Shift did nothing, the menu wouldn't open, and the fix finally ran after your selection was gone. Wend now waits at most a second and then fixes the text anyway. Your clipboard is put back as before. The one exception is content its app never supplied, which couldn't be pasted anyway.
+- **The diagnostic log records how long saving the clipboard took,** and when it timed out. As always, no clipboard content.
+
+**Windows:** not changed in this release. The Windows build has the same weakness and needs its own fix. The Windows download remains 1.2.4.
+
 ## [1.2.7] — 2026-09-27
 
 - **Fixed: a word that's real in both languages took two double-taps.** Some short words typed in the wrong layout are real words there too, and their conversion is also a real word. Wend saw the text as already correct and did nothing, so only the second ⇧⇧ within 2 seconds converted it. Double-tapping Shift is already telling Wend the text is wrong, so it now converts on the first press. Double-tap again to convert it back. Text that reads correctly and has no equally good conversion is still left alone.
@@ -83,6 +90,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.8]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.8
 [1.2.7]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.7
 [1.2.6]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.6
 [1.2.5]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.5

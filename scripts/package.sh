@@ -9,16 +9,16 @@
 #
 # Env overrides:
 #   BUNDLE_ID       default com.nachumsh.wend
-#   SHORT_VERSION   default 1.2.7
-#   BUILD_VERSION   default 14
+#   SHORT_VERSION   default 1.2.8
+#   BUILD_VERSION   default 15
 #   SIGN_IDENTITY   Developer ID Application identity (omit to skip signing)
 
 set -euo pipefail
 
 APP_NAME="Wend"
 BUNDLE_ID="${BUNDLE_ID:-com.nachumsh.wend}"
-SHORT_VERSION="${SHORT_VERSION:-1.2.7}"
-BUILD_VERSION="${BUILD_VERSION:-14}"
+SHORT_VERSION="${SHORT_VERSION:-1.2.8}"
+BUILD_VERSION="${BUILD_VERSION:-15}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
