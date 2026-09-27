@@ -2,6 +2,13 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.7] — 2026-09-27
+
+- **Fixed: a word that's real in both languages took two double-taps.** Some short words typed in the wrong layout are real words there too, and their conversion is also a real word. Wend saw the text as already correct and did nothing, so only the second ⇧⇧ within 2 seconds converted it. Double-tapping Shift is already telling Wend the text is wrong, so it now converts on the first press. Double-tap again to convert it back. Text that reads correctly and has no equally good conversion is still left alone.
+- **Fixed: a fix could paste your selection back unchanged.** When the active keyboard layout wasn't the one the text was typed in, as after switching layouts, Wend could pick a "conversion" that changed nothing and paste it back. The fix looked dead, and pressing again did the same thing. Wend now only picks a conversion that actually changes the text.
+
+**Windows:** both fixes are in the shared code Windows uses too, but no Windows build has been made since 1.2.4. Until one is, the Windows download remains 1.2.4.
+
 ## [1.2.6] — 2026-09-27
 
 - **The menu's About item no longer shows the version.** It reads just *About Wend*; the version is in the About window it opens.
@@ -76,6 +83,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.7]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.7
 [1.2.6]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.6
 [1.2.5]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.5
 [1.2.4]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.4
