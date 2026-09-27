@@ -2,6 +2,13 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.6] — 2026-09-27
+
+- **The menu's About item no longer shows the version.** It reads just *About Wend*; the version is in the About window it opens.
+- **The About window has the standard layout:** name, version and copyright. The separate *Created by* line is gone, since the copyright line already names the author.
+
+**Windows:** the same changes are in the source for Windows, but no Windows build has been made since 1.2.4. Until one is, the Windows download remains 1.2.4.
+
 ## [1.2.5] — 2026-09-26
 
 - **Report a Problem, from the menu.** When something goes wrong, choose *Report a Problem…*, say what happened — *I had to press ⇧⇧ twice*, *The text didn't convert at all*, *Another bug*, or *An idea or a suggestion* — describe it, and click *Save Report*. Wend saves a zip to your Downloads folder, named with the date and time to the second, and shows it in Finder. *Save & Email…* does the same and opens a prefilled email to send it with. This replaces *Send Feedback*, which could only inline part of the log into an email.
@@ -69,6 +76,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.6]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.6
 [1.2.5]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.5
 [1.2.4]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.4
 [1.2.3]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.3
