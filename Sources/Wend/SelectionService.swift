@@ -26,6 +26,12 @@ enum SelectionOutcome {
 final class SelectionService {
     private let pasteboard = NSPasteboard.general
 
+    /// How long reading the old clipboard may take before Wend stops waiting for it. It
+    /// normally takes a few milliseconds. But an item its app supplies only on request stalls
+    /// for the system's full 2-minute timeout when that app doesn't answer, and read on the
+    /// main thread that froze Wend: no menu, no hotkey, and a fix that ran 2 minutes late.
+    private static let saveTimeout: TimeInterval = 1.0
+
     /// Copy the selection, run `transform`, paste the result back. Original clipboard is
     /// preserved. The outcome says whether it replaced anything, and if not, why.
     @discardableResult
@@ -34,6 +40,8 @@ final class SelectionService {
         // would put the secret on the pasteboard. Silent no-op when secure input is active.
         guard !IsSecureEventInputEnabled() else { return .secureInput }
 
+        // nil when the old clipboard couldn't be read in time: the fix goes ahead, and there
+        // is nothing to put back afterwards.
         let saved = savePasteboard()
 
         let captured = copySelectedText()
@@ -53,7 +61,7 @@ final class SelectionService {
         let pb = pasteboard
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             pb.clearContents()
-            if !saved.isEmpty { pb.writeObjects(saved) }
+            if let saved, !saved.isEmpty { pb.writeObjects(saved) }
         }
         return .replaced
     }
@@ -146,19 +154,43 @@ final class SelectionService {
 
     // MARK: - Clipboard save / restore
 
-    private func savePasteboard() -> [NSPasteboardItem] {
-        pasteboard.pasteboardItems?.map { item in
-            let copy = NSPasteboardItem()
-            for type in item.types {
-                if let data = item.data(forType: type) {
-                    copy.setData(data, forType: type)
+    /// The clipboard's items, read on a background queue so an app that never answers can't
+    /// freeze Wend. nil when the read doesn't finish within `saveTimeout`: it's abandoned and
+    /// its late result dropped. A stalled read doesn't hold up other clipboard calls, so ⌘C,
+    /// the paste and the change-count polling still work while it waits.
+    private func savePasteboard() -> [NSPasteboardItem]? {
+        final class Box: @unchecked Sendable { var items: [NSPasteboardItem] = [] }
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        let pb = pasteboard
+        let started = Date()
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.items = pb.pasteboardItems?.map { item in
+                let copy = NSPasteboardItem()
+                for type in item.types {
+                    if let data = item.data(forType: type) {
+                        copy.setData(data, forType: type)
+                    }
                 }
-            }
-            return copy
-        } ?? []
+                return copy
+            } ?? []
+            done.signal()
+        }
+        let finished = done.wait(timeout: .now() + Self.saveTimeout) == .success
+        let waited = Int(Date().timeIntervalSince(started) * 1000)
+        guard finished else {
+            Log.write("clipboard save timed out after \(waited) ms: an app didn't supply its data; the clipboard won't be restored")
+            return nil
+        }
+        Log.write("clipboard saved items=\(box.items.count) in \(waited) ms")
+        return box.items
     }
 
-    private func restorePasteboard(_ items: [NSPasteboardItem]) {
+    /// Put the saved clipboard back. With nothing saved there is nothing to put back, and
+    /// clearing would only throw away what's there now: the old contents, if ⌘C found no
+    /// selection, or else the copied selection.
+    private func restorePasteboard(_ items: [NSPasteboardItem]?) {
+        guard let items else { return }
         pasteboard.clearContents()
         if !items.isEmpty {
             pasteboard.writeObjects(items)
