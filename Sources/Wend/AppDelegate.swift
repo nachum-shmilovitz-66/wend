@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var loginItem: NSMenuItem!
     private var loggingItem: NSMenuItem!
     private var axStatusItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
+    private let updates = UpdateChecker()
     private let launchedAt = Date()
 
     /// Shown on reopen (relaunch while already running) and from the menu. Closures keep the
@@ -30,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         wc.onToggleLogin = { [weak self] in self?.toggleLaunchAtLogin() }
         wc.onOpenAccessibility = { [weak self] in self?.permissions.openAccessibilitySettings() }
         wc.onAbout = { [weak self] in self?.showAbout() }
+        wc.onCheckForUpdates = { [weak self] in self?.checkForUpdates() }
         wc.onQuit = { [weak self] in self?.quit() }
         wc.onFeedback = { [weak self] in self?.openReport() }
         return wc
@@ -169,6 +172,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyEquivalent: ""
         )
         about.target = self
+
+        // Where macOS apps put it: straight after About. Checks only when clicked.
+        updateItem = menu.addItem(
+            withTitle: "Check for Updates…",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        updates.onBusyChange = { [weak self] busy in
+            self?.updateItem.isEnabled = !busy
+            self?.updateItem.title = busy ? "Checking for Updates…" : "Check for Updates…"
+        }
 
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit Wend", action: #selector(quit), keyEquivalent: "q")
@@ -390,6 +405,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // number is still carried in feedback reports via feedbackContext().
             .version: "",
         ])
+    }
+
+    @objc private func checkForUpdates() {
+        updates.check(current: Self.shortVersion)
     }
 
     @objc private func quit() {

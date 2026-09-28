@@ -22,6 +22,7 @@ final class SettingsWindowController: NSWindowController {
     var onToggleLogin: () -> Void = {}
     var onOpenAccessibility: () -> Void = {}
     var onAbout: () -> Void = {}
+    var onCheckForUpdates: () -> Void = {}
     var onQuit: () -> Void = {}
     var onFeedback: () -> Void = {}
 
@@ -100,9 +101,10 @@ final class SettingsWindowController: NSWindowController {
         // Problem report / feedback + footer.
         let feedbackButton = NSButton(title: "Report a Problem…", target: self, action: #selector(feedback))
         feedbackButton.bezelStyle = .rounded
+        let updates = smallButton("Check for Updates…", action: #selector(checkForUpdates))
         let about = smallButton("About Wend", action: #selector(about))
         let quit = smallButton("Quit Wend", action: #selector(quit))
-        let footer = row([spacer(), about, quit])
+        let footer = row([updates, spacer(), about, quit])
 
         let stack = NSStackView(views: [
             title, hint, separator(), axRow, separator(),
@@ -115,8 +117,9 @@ final class SettingsWindowController: NSWindowController {
         content.addSubview(stack)
 
         // Fixed content width — otherwise the single-line hint resists compression and stretches
-        // the window very wide. The hint wraps to this width instead.
-        let contentWidth: CGFloat = 300
+        // the window very wide. The hint wraps to this width instead. 320 is what the footer's
+        // three small buttons need (311 measured), so they don't overflow the row.
+        let contentWidth: CGFloat = 320
         hint.preferredMaxLayoutWidth = contentWidth
         hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -186,6 +189,7 @@ final class SettingsWindowController: NSWindowController {
     @objc private func toggleLogin() { onToggleLogin(); refresh() }
     @objc private func openAccessibility() { onOpenAccessibility(); refresh() }
     @objc private func about() { onAbout() }
+    @objc private func checkForUpdates() { onCheckForUpdates() }
     @objc private func quit() { onQuit() }
     @objc private func feedback() { onFeedback() }
 }
