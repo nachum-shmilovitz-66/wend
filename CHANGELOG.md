@@ -2,6 +2,12 @@
 
 All notable changes to Wend. Newest first.
 
+## [1.2.9] — 2026-09-28
+
+- **Check for Updates…** in the menu, under About Wend. It checks only when you choose it.
+
+**Windows:** unchanged; the download remains 1.2.4.
+
 ## [1.2.8] — 2026-09-27
 
 - **Fixed: Wend could freeze for 2 minutes.** Before a fix, Wend saves your clipboard so it can put it back afterwards. Some apps supply clipboard contents only when something asks for them. If that app didn't answer, Wend waited the system's full 2 minutes: double-tapping Shift did nothing, the menu wouldn't open, and the fix finally ran after your selection was gone. Wend now waits at most a second and then fixes the text anyway. Your clipboard is put back as before. The one exception is content its app never supplied, which couldn't be pasted anyway.
@@ -90,6 +96,7 @@ Privacy & security hardening (from a full security review).
 - Signed with Developer ID and notarized; ships as a `.pkg` installer.
 - Requirements: Apple Silicon, macOS 13+.
 
+[1.2.9]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.9
 [1.2.8]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.8
 [1.2.7]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.7
 [1.2.6]: https://github.com/nachum-shmilovitz-66/wend/releases/tag/v1.2.6
