@@ -108,8 +108,7 @@ final class UpdateChecker {
     private func offerDownload(_ release: AvailableRelease, current: AppVersion) {
         let alert = NSAlert()
         alert.messageText = "Wend \(release.version) is available"
-        alert.informativeText = "You have version \(current). Download the installer and open it: "
-            + "it quits this copy of Wend, installs the new one and starts it."
+        alert.informativeText = "You have version \(current)."
         alert.addButton(withTitle: "Download")
         alert.addButton(withTitle: "Release Notes")
         alert.addButton(withTitle: "Later")
